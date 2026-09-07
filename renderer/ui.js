@@ -12,7 +12,7 @@ import { THEMES } from './visualizer.js';
 
 const SPECTRUM_BARS = 56;
 const IDLE_MS       = 2800;   // hide the dock this long after the last input
-const VIZ_ORDER     = ['bars', 'orb', 'particles', 'random', 'speaker', 'baby'];
+const VIZ_ORDER     = ['bars', 'orb', 'particles', 'random', 'speaker', 'baby', 'exc3'];
 
 const rgbToHex = ([r, g, b]) => {
   const c = n => Math.round(Math.min(1, Math.max(0, n)) * 255).toString(16).padStart(2, '0');
@@ -35,6 +35,7 @@ export class DockUI {
     this._sensVal   = document.getElementById('sens-val');
     this._flashEl   = document.getElementById('beat-flash');
     this._hintEl    = document.getElementById('hint');
+    this._playBtn   = document.getElementById('btn-play-pause');
     this._css       = document.documentElement.style;
 
     this._collapsed   = false;   // toggled by the user (H / peek / hide button)
@@ -49,6 +50,7 @@ export class DockUI {
 
     this._buildSpectrum();
     this._wireSource();
+    this._wirePlayPause();
     this._wireMenus();
     this._wirePresets();
     this._wireSlider();
@@ -66,6 +68,29 @@ export class DockUI {
 
   get sensitivity() { return parseFloat(this._sensEl.value); }
 
+  /** Update play/pause button state and visibility on the panel. */
+  setPlayState(isPlaying, canControl = true) {
+    this._isPlaying = isPlaying;
+    if (!this._playBtn) return;
+    this._playBtn.hidden = !canControl;
+    if (!canControl) return;
+    const icon = document.getElementById('play-icon');
+    const label = document.getElementById('play-label');
+    if (isPlaying) {
+      if (icon) icon.innerHTML = '&#9208;';
+      if (label) label.textContent = 'PAUSE';
+      this._playBtn.classList.remove('paused');
+      this._playBtn.title = 'Pause playback (Space)';
+      this._playBtn.setAttribute('aria-label', 'Pause playback');
+    } else {
+      if (icon) icon.innerHTML = '&#9654;';
+      if (label) label.textContent = 'PLAY';
+      this._playBtn.classList.add('paused');
+      this._playBtn.title = 'Resume playback (Space)';
+      this._playBtn.setAttribute('aria-label', 'Resume playback');
+    }
+  }
+
   setStatus(msg, state = '') {
     this._statusEl.textContent = msg;
     this._dotEl.className = 'dot' + (state ? ' ' + state : '');
@@ -77,6 +102,17 @@ export class DockUI {
 
   /** Reflect a programmatic visualizer change back into the menu. */
   syncViz(value) { this._selectMenuItem('viz', value); }
+
+  /** Reflect active audio source in the segmented control and toggle panel play button visibility. */
+  syncSource(kind) {
+    for (const b of document.querySelectorAll('#source-seg .seg-btn')) {
+      const match = b.dataset.src === kind;
+      b.classList.toggle('active', match);
+      b.setAttribute('aria-pressed', String(match));
+    }
+    // Only appear if the user chose the file option
+    this.setPlayState(this._isPlaying ?? true, kind === 'file');
+  }
 
   /** Update accent CSS variables + the color menu selection. */
   setTheme(name) {
@@ -92,12 +128,13 @@ export class DockUI {
   }
 
   /** Called every animation frame from app.js. */
-  react(bins, energy, beat) {
+  react(bins, energy, beat, details = {}) {
+    const kick = details.kick ?? (beat ? 1 : 0);
     // Smoothed energy drives the dock's ambient glow.
     this._energy += (Math.min(energy * 2.2, 1) - this._energy) * 0.12;
     this._beat *= 0.86;
-    if (beat) {
-      this._beat = 1;
+    if (beat || kick > 0.4) {
+      this._beat = Math.max(this._beat, kick > 0.4 ? kick : 1);
       this._flashEl.classList.add('pulse');
       clearTimeout(this._flashTimer);
       this._flashTimer = setTimeout(() => this._flashEl.classList.remove('pulse'), 90);
@@ -108,7 +145,7 @@ export class DockUI {
     // Mini spectrum — skip the DOM work while the dock is off-screen.
     if (this._collapsed || this._idle) return;
     for (let i = 0; i < SPECTRUM_BARS; i++) {
-      const src = Math.floor(Math.pow(i / SPECTRUM_BARS, 1.6) * 210) + 1;
+      const src = Math.floor((i / SPECTRUM_BARS) * (bins.length - 1));
       let v = 0;
       for (let j = src; j < src + 4 && j < bins.length; j++) v = Math.max(v, bins[j]);
       const prev = this._smooth[i];
@@ -135,13 +172,18 @@ export class DockUI {
   _wireSource() {
     for (const btn of document.querySelectorAll('#source-seg .seg-btn')) {
       btn.addEventListener('click', () => {
-        for (const b of document.querySelectorAll('#source-seg .seg-btn')) {
-          b.classList.toggle('active', b === btn);
-          b.setAttribute('aria-pressed', String(b === btn));
-        }
-        this._on.onSource(btn.dataset.src);
+        const src = btn.dataset.src;
+        this.syncSource(src);
+        this._on.onSource(src);
       });
     }
+  }
+
+  _wirePlayPause() {
+    this._playBtn?.addEventListener('click', () => {
+      this._on.onPlayPause?.();
+      this._markActivity();
+    });
   }
 
   _wireMenus() {
@@ -304,6 +346,13 @@ export class DockUI {
       switch (e.key.toLowerCase()) {
         case 'h':
           this._setCollapsed(!this._collapsed);
+          break;
+        case ' ':
+        case 'space':
+          if (this._on.onPlayPause) {
+            e.preventDefault();
+            this._on.onPlayPause();
+          }
           break;
         case 'f':
           this._toggleFullscreen();
