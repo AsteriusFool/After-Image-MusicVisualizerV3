@@ -2,68 +2,116 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Music Visualizer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#191917">
+  <title>Afterimage &#8212; Music Visualizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-  <!-- Frameless window title bar (Electron only) -->
-  <div id="titlebar">
-    <span id="titlebar-drag">Music Visualizer</span>
-    <div id="titlebar-controls">
-      <button id="btn-minimize" title="Minimize">&#8212;</button>
-      <button id="btn-maximize" title="Maximize">&#9633;</button>
-      <button id="btn-close"    title="Close">&#x2715;</button>
-    </div>
-  </div>
-
-  <!-- Control strip -->
-  <div id="controls">
-    <div class="ctrl-group">
-      <button id="btn-system-audio" class="primary">System Audio</button>
-      <button id="btn-mic">Microphone</button>
-      <span id="status-dot" class="dot"></span>
-      <span id="status">No audio source</span>
-    </div>
-
-    <div class="ctrl-group select-group">
-      <label for="viz-select">Visualizer</label>
-      <select id="viz-select">
-        <option value="bars">Bars</option>
-        <option value="orb">Orb</option>
-        <option value="particles">Particles</option>
-        <option value="random">Morphing Forms</option>
-        <option value="speaker">Neon Wormhole</option>
-        <option value="baby">Dancing Baby</option>
-      </select>
-    </div>
-
-    <div class="ctrl-group select-group">
-      <label for="theme-select">Color</label>
-      <select id="theme-select">
-        <option value="neon">Neon</option>
-        <option value="fire">Fire</option>
-        <option value="ocean">Ocean</option>
-        <option value="aurora">Aurora</option>
-        <option value="sunset">Sunset</option>
-        <option value="ice">Ice</option>
-        <option value="toxic">Toxic</option>
-        <option value="candy">Candy</option>
-      </select>
-    </div>
-
-    <div class="ctrl-group">
-      <label for="sensitivity">Sensitivity</label>
-      <input id="sensitivity" type="range" min="0.1" max="4" step="0.05" value="1.0">
-    </div>
-  </div>
-
-  <canvas id="canvas"></canvas>
-
-  <!-- Dancing baby GIF overlay; src is set dynamically when music plays -->
+  <canvas id="canvas" aria-label="Music visualization"></canvas>
   <img id="baby-gif" src="" alt="">
   <canvas id="baby-canvas"></canvas>
+  <div id="beat-flash" aria-hidden="true"></div>
 
+  <div id="chrome-zone">
+    <div id="titlebar">
+      <span id="titlebar-drag">Afterimage / Music Visualizer</span>
+      <div id="titlebar-controls">
+        <button id="btn-minimize" title="Minimize" aria-label="Minimize">&#8722;</button>
+        <button id="btn-maximize" title="Maximize" aria-label="Maximize">&#9633;</button>
+        <button id="btn-close" title="Close" aria-label="Close">&#215;</button>
+      </div>
+    </div>
+  </div>
+
+  <header class="masthead interface">
+    <div class="wordmark"><span class="brand-mark" aria-hidden="true">a<span>i</span></span>afterimage</div>
+    <span class="masthead-note">An instrument for seeing sound.</span>
+    <span class="edition">SOUND &#8594; VISION</span>
+  </header>
+
+  <section class="stage-caption interface" aria-label="Current visualization">
+    <span class="eyebrow">NOW ON DISPLAY</span>
+    <h1><span id="stage-number">01</span><span id="stage-name">Bars</span></h1>
+    <p id="stage-description">A rotating skyline of sound.</p>
+  </section>
+  <aside class="input-guide interface" id="input-guide">
+    <span class="guide-mark" aria-hidden="true">&#8601;</span>
+    <p>Start with a sound.</p>
+    <span>Choose System or Mic below.<br>Play something you love.</span>
+  </aside>
+
+  <div id="dock-zone">
+    <section id="dock" data-hidden="false" aria-label="Visualizer controls">
+      <div class="console-top">
+        <span class="eyebrow"><i class="pilot" aria-hidden="true"></i> VISUAL ENGINE</span>
+        <span class="console-hint">Select a form <span aria-hidden="true">/</span> keys 1&#8211;6</span>
+        <button class="text-btn" id="btn-hide-dock" title="Hide controls (H)">Hide panel <kbd>H</kbd></button>
+      </div>
+
+      <nav class="preset-bank" aria-label="Visualizers">
+        <button class="preset" data-preset="bars" data-label="Bars" data-description="Rotating spectrum" aria-pressed="true" title="Bars (1)"><span class="preset-number">01</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 30V20m8 13V12m8 24V5m8 28V12m8 18V20"/><ellipse cx="24" cy="32" rx="19" ry="7"/></svg><span class="preset-name">Bars</span><span class="preset-description">Rotating spectrum</span></button>
+<button class="preset" data-preset="orb" data-label="Orb" data-description="Flowing membrane" aria-pressed="false" title="Orb (2)"><span class="preset-number">02</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 24C7 10 17 7 24 8S41 10 40 24 32 40 24 40 7 38 7 24Z"/><path d="M10 23q14-15 28 0M10 28q14 12 28 0M24 9q-12 16 0 30M24 9q12 16 0 30"/></svg><span class="preset-name">Orb</span><span class="preset-description">Flowing membrane</span></button>
+<button class="preset" data-preset="particles" data-label="Particles" data-description="Orbiting cloud" aria-pressed="false" title="Particles (3)"><span class="preset-number">03</span><svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="24" rx="19" ry="10" transform="rotate(-30 24 24)"/><ellipse cx="24" cy="24" rx="10" ry="19" transform="rotate(-30 24 24)"/><circle cx="24" cy="24" r="2"/></svg><span class="preset-name">Particles</span><span class="preset-description">Orbiting cloud</span></button>
+<button class="preset" data-preset="random" data-label="Morphing Forms" data-description="Evolving geometry" aria-pressed="false" title="Morphing Forms (4)"><span class="preset-number">04</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="m24 5 18 29-33 5 15-34Z"/><circle cx="24" cy="24" r="15"/></svg><span class="preset-name">Morphing Forms</span><span class="preset-description">Evolving geometry</span></button>
+<button class="preset" data-preset="speaker" data-label="Neon Wormhole" data-description="Through the throat" aria-pressed="false" title="Neon Wormhole (5)"><span class="preset-number">05</span><svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="24" rx="19" ry="17"/><ellipse cx="25" cy="24" rx="13" ry="12"/><ellipse cx="27" cy="24" rx="7" ry="7"/><circle cx="29" cy="24" r="2"/></svg><span class="preset-name">Neon Wormhole</span><span class="preset-description">Through the throat</span></button>
+<button class="preset" data-preset="baby" data-label="Dancing Baby" data-description="A cult classic" aria-pressed="false" title="Dancing Baby (6)"><span class="preset-number">06</span><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="25" cy="11" r="5"/><path d="m24 17-3 13 10 10m-10-10-9 9m11-18-11 1-4-6m16 4 9 7 7-6"/></svg><span class="preset-name">Dancing Baby</span><span class="preset-description">A cult classic</span></button>
+      </nav>
+
+      <div class="dock-body">
+        <section class="control-cell input-cell" aria-label="Audio input">
+          <span class="eyebrow">01 / INPUT</span>
+          <div class="seg" id="source-seg" role="group" aria-label="Audio source">
+            <button id="btn-system-audio" class="seg-btn active" data-src="system" aria-pressed="true">System <span aria-hidden="true">&#8599;</span></button>
+            <button id="btn-mic" class="seg-btn" data-src="mic" aria-pressed="false">Mic <span aria-hidden="true">&#9675;</span></button>
+          </div>
+        </section>
+
+        <section class="control-cell signal-cell" aria-label="Audio signal">
+          <div class="signal-heading"><span class="eyebrow">SIGNAL</span><span class="meter-label">LOW &#9472; HIGH</span></div>
+          <div id="dock-spectrum" aria-hidden="true"></div>
+          <div class="status" id="status-wrap" role="status"><span id="status-dot" class="dot"></span><span id="status">Choose an audio source</span></div>
+        </section>
+
+        <section class="control-cell slider" id="sens-wrap">
+          <label class="eyebrow" for="sensitivity">02 / SENSITIVITY</label>
+          <div class="slider-line"><input id="sensitivity" type="range" min="0.1" max="4" step="0.05" value="1.0"><output class="slider-val" id="sens-val" for="sensitivity">1.0&#215;</output></div>
+          <div class="range-labels"><span>Subtle</span><span>Intense</span></div>
+        </section>
+
+        <section class="control-cell color-cell">
+          <span class="eyebrow">03 / PALETTE</span>
+          <div class="menu" id="theme-menu">
+            <button class="menu-trigger" id="theme-trigger" aria-haspopup="menu" aria-controls="theme-pop" aria-expanded="false">
+              <span class="swatch" id="theme-swatch"></span><span id="theme-value">Neon</span><span class="caret" aria-hidden="true">&#8963;</span>
+            </button>
+            <div class="menu-pop menu-pop--grid" id="theme-pop" role="menu" aria-label="Color palette" hidden><button class="theme-chip" role="menuitemradio" data-value="neon"   style="--c-a:#7300ff;--c-b:#00bfff">Neon</button>
+            <button class="theme-chip" role="menuitemradio" data-value="fire"   style="--c-a:#ff1400;--c-b:#ffbf00">Fire</button>
+            <button class="theme-chip" role="menuitemradio" data-value="ocean"  style="--c-a:#001fd9;--c-b:#00d9a6">Ocean</button>
+            <button class="theme-chip" role="menuitemradio" data-value="aurora" style="--c-a:#00bf40;--c-b:#8000e6">Aurora</button>
+            <button class="theme-chip" role="menuitemradio" data-value="sunset" style="--c-a:#ff1459;--c-b:#ffa60d">Sunset</button>
+            <button class="theme-chip" role="menuitemradio" data-value="ice"    style="--c-a:#268cff;--c-b:#b3f2ff">Ice</button>
+            <button class="theme-chip" role="menuitemradio" data-value="toxic"  style="--c-a:#8cff00;--c-b:#00f273">Toxic</button>
+            <button class="theme-chip" role="menuitemradio" data-value="candy"  style="--c-a:#ff26b3;--c-b:#5940ff">Candy</button>
+          </div>
+          </div>
+        </section>
+
+        <section class="control-cell finish-cell" aria-label="Display options">
+          <span class="eyebrow">04 / FINISH</span>
+          <div class="finish-buttons">
+            <button class="icon-btn active" id="btn-retro" title="Retro CRT look (R)" aria-pressed="true"><span class="switch-light" aria-hidden="true"></span>CRT</button>
+            <button class="icon-btn" id="btn-fullscreen" title="Fullscreen (F)" aria-label="Toggle fullscreen">&#9974;</button>
+          </div>
+        </section>
+      </div>
+      <footer class="console-footer"><span>AFTERIMAGE <span class="footer-slash">/</span> MUSIC VISUALIZER</span><span>Made to disappear. <kbd>H</kbd> hide &#183; <kbd>F</kbd> fullscreen</span></footer>
+      <!-- Kept for the existing menu controller and keyboard shortcuts. -->
+      <div id="viz-menu" hidden><button id="viz-trigger" aria-expanded="false"><span id="viz-value">Bars</span></button><div id="viz-pop" role="menu" hidden><button role="menuitemradio" data-value="bars">Bars</button><button role="menuitemradio" data-value="orb">Orb</button><button role="menuitemradio" data-value="particles">Particles</button><button role="menuitemradio" data-value="random">Morphing Forms</button><button role="menuitemradio" data-value="speaker">Neon Wormhole</button><button role="menuitemradio" data-value="baby">Dancing Baby</button></div></div>
+    </section>
+    <button id="dock-peek" title="Show controls (H)" aria-label="Show controls">afterimage <span>&#8593; <kbd>H</kbd></span></button>
+  </div>
+  <div id="hint" role="status"></div>
   <script type="module" src="app.js"></script>
 </body>
 </html>

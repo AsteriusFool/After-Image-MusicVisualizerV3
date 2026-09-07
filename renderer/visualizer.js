@@ -8,9 +8,10 @@ import { AmbientEffects } from './effects.js';
 import { RandomViz }     from './viz/random.js';
 import { SpeakerViz }    from './viz/speaker.js';
 import { BabyViz }       from './viz/baby.js';
+import { retroVertexShader, retroFragmentShader } from './shaders/retro.glsl.js';
 
 /** Themes: [colorA, colorB] as normalised RGB triples. */
-const THEMES = {
+export const THEMES = {
   neon:   { a: [0.45, 0.0, 1.0],  b: [0.0, 0.75, 1.0]  },
   fire:   { a: [1.0, 0.08, 0.0],  b: [1.0, 0.75, 0.0]  },
   ocean:  { a: [0.0, 0.12, 0.85], b: [0.0, 0.85, 0.65]  },
@@ -27,6 +28,10 @@ export class Visualizer {
     this._vizMode  = 'bars';
     this._theme    = 'neon';
     this._active   = null;
+
+    // Retro CRT grade — target is what the user asked for, amount eases toward it.
+    this._retroTarget = 1;
+    this._retroAmount = 1;
 
     // ── Renderer ──────────────────────────────────────────────────
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -66,6 +71,27 @@ export class Visualizer {
     });
     this._postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this._postMaterial));
 
+    // ── Retro post-processing pass ───────────────────────────────
+    // Every visualisation renders into this target, then gets composited to the
+    // screen through the CRT / synthwave grade below.
+    this._sceneRT = new THREE.WebGLRenderTarget(1, 1);
+    this._retroScene = new THREE.Scene();
+    this._retroMaterial = new THREE.ShaderMaterial({
+      vertexShader: retroVertexShader,
+      fragmentShader: retroFragmentShader,
+      uniforms: {
+        uScene:      { value: null },
+        uResolution: { value: new THREE.Vector2(1, 1) },
+        uTime:       { value: 0 },
+        uBeat:       { value: 0 },
+        uEnergy:     { value: 0 },
+        uAmount:     { value: this._retroAmount },
+      },
+      depthWrite: false,
+      depthTest: false,
+    });
+    this._retroScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this._retroMaterial));
+
     // ── Scene & Camera ────────────────────────────────────────────
     this._scene  = new THREE.Scene();
     this._camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
@@ -98,6 +124,13 @@ export class Visualizer {
     this._buildViz(mode);
   }
 
+  /** Toggle / set the retro CRT grade. Accepts a boolean. */
+  setRetro(on) {
+    this._retroTarget = on ? 1 : 0;
+  }
+
+  get retroEnabled() { return this._retroTarget === 1; }
+
   setTheme(name) {
     if (!THEMES[name]) return;
     this._theme = name;
@@ -121,20 +154,33 @@ export class Visualizer {
     }
     this._active?.update(time, energy, beat);
 
+    // ── Pass 1 — draw the active visualisation into the offscreen target ──
     if (this._vizMode === 'speaker') {
       this._renderer.setRenderTarget(this._feedbackWrite);
       this._renderer.clear();
       this._renderer.render(this._scene, this._camera);
       this._postMaterial.uniforms.uCurrent.value = this._feedbackWrite.texture;
       this._postMaterial.uniforms.uPrevious.value = this._feedbackRead.texture;
-      this._renderer.setRenderTarget(null);
+      this._renderer.setRenderTarget(this._sceneRT);
       this._renderer.render(this._postScene, this._postCamera);
       const previous = this._feedbackRead;
       this._feedbackRead = this._feedbackWrite;
       this._feedbackWrite = previous;
     } else {
+      this._renderer.setRenderTarget(this._sceneRT);
       this._renderer.render(this._scene, this._camera);
     }
+
+    // ── Pass 2 — composite through the retro CRT grade to the screen ──
+    this._retroAmount += (this._retroTarget - this._retroAmount) * 0.12;
+    const u = this._retroMaterial.uniforms;
+    u.uScene.value  = this._sceneRT.texture;
+    u.uTime.value   = time;
+    u.uBeat.value   = beat ? 1.0 : 0.0;
+    u.uEnergy.value = energy;
+    u.uAmount.value = this._retroAmount;
+    this._renderer.setRenderTarget(null);
+    this._renderer.render(this._retroScene, this._postCamera);
   }
 
   // ── Private helpers ─────────────────────────────────────────────
@@ -186,8 +232,8 @@ export class Visualizer {
     }
 
     if (mode === 'speaker') {
-      this._camera.position.set(0, 0, 0.1);
-      this._camera.lookAt(0, 0, -8);
+      this._camera.position.set(0, 0.55, 3.0);
+      this._camera.lookAt(0, -0.15, -14);
       this._scene.background = new THREE.Color(0x000000);
       this._resetFeedback();
       return;
@@ -225,5 +271,7 @@ export class Visualizer {
     this._feedbackRead.setSize(w * pixelRatio, h * pixelRatio);
     this._feedbackWrite.setSize(w * pixelRatio, h * pixelRatio);
     this._postMaterial.uniforms.uTexel.value.set(1 / (w * pixelRatio), 1 / (h * pixelRatio));
+    this._sceneRT.setSize(w * pixelRatio, h * pixelRatio);
+    this._retroMaterial.uniforms.uResolution.value.set(w * pixelRatio, h * pixelRatio);
   }
 }

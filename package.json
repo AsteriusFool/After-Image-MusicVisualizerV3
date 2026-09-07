@@ -11,6 +11,7 @@
     "build": "electron-builder --win"
   },
   "dependencies": {
+    "motion": "^13.2.0",
     "three": "0.160.0"
   },
   "devDependencies": {
@@ -39,5 +40,8 @@
       "renderer/**/*",
       "!node_modules/**/*"
     ]
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true
   }
 }
