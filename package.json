@@ -6,6 +6,7 @@
   "scripts": {
     "start": "electron .",
     "web": "node server.js",
+    "test": "node --check main.js preload.js server.js scripts/postinstall.js renderer/audio-analyzer.js renderer/visualizer.js renderer/app.js renderer/ui.js renderer/exc3-typography.js renderer/viz/exc3.js renderer/shaders/exc3.glsl.js",
     "postinstall": "node scripts/postinstall.js",
     "dev": "set NODE_ENV=development&& electron .",
     "build": "electron-builder --win"

@@ -22,17 +22,23 @@ export class BarsViz {
     const phases = new Float32Array(BAR_COUNT);
     this._levels = new Float32Array(BAR_COUNT);
     this._bands = [];
-    // Whole-bin boundaries keep neighbouring bars on distinct frequency ranges.
+    // Distribute the mirrored bars smoothly across the full 256-bin spectrum
     const bandCount = BAR_COUNT / 2;
-    const bandEdge = index => Math.floor(index + (128 - bandCount) * (index / bandCount) ** 2);
     for (let i = 0; i < BAR_COUNT; i++) {
-      // Mirror the spectrum across the two halves, with bass at both ends.
-      const band = Math.min(i, BAR_COUNT - 1 - i);
-      const phase = band / (BAR_COUNT / 2 - 1);
-      phases[i] = phase;
-      // Narrow low-frequency ranges gradually widen toward the highs.
-      const start = bandEdge(band);
-      const end = bandEdge(band + 1);
+      // Symmetrical front-to-back phase for the color gradient
+      const symIndex = Math.min(i, BAR_COUNT - 1 - i);
+      phases[i] = symIndex / (bandCount - 1);
+
+      // Subtle sub-bar stagger between the two halves ensures no two adjacent bars share identical levels
+      const norm = i < bandCount
+        ? (i + 0.15) / (bandCount + 0.3)
+        : (BAR_COUNT - 1 - i + 0.35) / (bandCount + 0.3);
+
+      // Span smoothly across bins 2 to 250 without double-curving or grouping
+      const t0 = Math.pow(norm, 1.1);
+      const t1 = Math.pow(norm + (1 / bandCount), 1.1);
+      const start = t0 * 246 + 2;
+      const end   = Math.max(start + 1.2, t1 * 246 + 2);
       this._bands.push({ start, end });
     }
     geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phases, 1));
