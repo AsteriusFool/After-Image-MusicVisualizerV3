@@ -42,7 +42,7 @@ export class OrbViz {
     this._mat.uniforms.uColorB.value.setRGB(...colorB);
   }
 
-  update(time, energy, beat) {
+  update(time, energy, beat, details = {}) {
     const dt = this._lastTime === null ? 1 / 60 : Math.max(0, time - this._lastTime);
     this._lastTime = time;
     if (this._startTime === null) this._startTime = time;
@@ -63,6 +63,9 @@ export class OrbViz {
     u.uEnergy.value += (safeEnergy - u.uEnergy.value) * (1 - Math.exp(-dt * 10));
     u.uBeat.value *= Math.exp(-dt * 9);
     if (beat) u.uBeat.value = 1;
+    const phase = details?.phase ?? 0;
+    const preBeat = Math.pow(Math.max(0, phase - 0.82) / 0.18, 2) * 0.28;
+    u.uBeat.value = Math.max(u.uBeat.value, preBeat);
   }
 
   dispose() {

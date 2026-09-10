@@ -89,7 +89,7 @@ export class BarsViz {
     this._rim.material.color.setRGB(...colorA).lerp(this._mat.uniforms.uColorB.value, 0.5).multiplyScalar(0.38);
   }
 
-  update(time, energy, beat) {
+  update(time, energy, beat, details = {}) {
     const dt = this._lastTime === null ? 1 / 60 : Math.max(0, time - this._lastTime);
     this._lastTime = time;
     const data = this._freqTex.image.data;
@@ -108,7 +108,11 @@ export class BarsViz {
     this._levelAttribute.needsUpdate = true;
     this._beat *= Math.exp(-dt * 8);
     if (beat) this._beat = 1;
-    this._mat.uniforms.uBeat.value = this._beat;
+    // Beat-phase anticipation: a small pre-swell in the last ~18% of the predicted
+    // beat cycle, so the ring leans into the next hit instead of only reacting after it.
+    const phase = details?.phase ?? 0;
+    const preBeat = Math.pow(Math.max(0, phase - 0.82) / 0.18, 2) * 0.3;
+    this._mat.uniforms.uBeat.value = Math.max(this._beat, preBeat);
     const safeEnergy = Number.isFinite(energy) ? Math.max(0, Math.min(1, energy)) : 0;
     this._energy += (safeEnergy - this._energy) * (1 - Math.exp(-dt * 4));
     // Integrating rotation prevents jumps when the music intensity changes.

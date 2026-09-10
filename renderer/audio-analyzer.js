@@ -44,6 +44,21 @@ export class AudioAnalyzer {
     this._lastKickTime = this._lastSnareTime = this._lastBeatTime = 0;
     this._prevLow = this._prevMid = this._prevHigh = this._prevEnergy = this._lastFrameTime = 0;
 
+    /** Coarse song-structure state: 'intro' | 'build' | 'drop' | 'peak' | 'breakdown'. */
+    this.section = 'intro';
+    /** True for exactly one frame when `section` changes. */
+    this.sectionChanged = false;
+    this._sectionFastEMA = 0;   // ~0.35s time constant
+    this._sectionSlowEMA = 0;   // ~3s time constant
+    this._sectionTrendEMA = 0;  // ~8s time constant — the "recent baseline" section rides on
+    this._kickDensity = 0;
+    this._sectionHoldUntil = 0;
+    this._dropCooldownUntil = 0;
+    this._sectionInitialized = false;
+
+    /** MediaStreamAudioDestinationNode tap for session recording (see getRecordingStream). */
+    this._recordDest = null;
+
     /** Track metadata for typography and HUD overlays */
     this.metadata = {
       title: 'UNTITLED',
@@ -88,6 +103,8 @@ export class AudioAnalyzer {
     this._buildLogMap(this._ctx.sampleRate, this._analyser.frequencyBinCount);
     this._sourceNode = this._ctx.createMediaStreamSource(stream);
     this._sourceNode.connect(this._analyser);
+    this._recordDest = this._ctx.createMediaStreamDestination();
+    this._analyser.connect(this._recordDest);
     this.metadata = {
       title: 'LIVE AUDIO FEED',
       artist: 'HARDWARE / MIC INPUT',
@@ -110,6 +127,8 @@ export class AudioAnalyzer {
     this._sourceNode.connect(this._analyser);
     // Route to audio hardware so user hears the playback
     this._analyser.connect(this._ctx.destination);
+    this._recordDest = this._ctx.createMediaStreamDestination();
+    this._analyser.connect(this._recordDest);
     if (this._ctx.state === 'suspended') {
       this._ctx.resume();
     }
@@ -143,6 +162,8 @@ export class AudioAnalyzer {
 
     bufferSource.connect(this._analyser);
     this._analyser.connect(this._ctx.destination);
+    this._recordDest = this._ctx.createMediaStreamDestination();
+    this._analyser.connect(this._recordDest);
 
     bufferSource.start(0);
     this._bufferSource = bufferSource;
@@ -184,6 +205,7 @@ export class AudioAnalyzer {
       this._analyser = null;
       this._raw      = null;
     }
+    this._recordDest = null;
     this.bins.fill(0);
     this._decay.fill(0);
     this.beat   = false;
@@ -194,6 +216,22 @@ export class AudioAnalyzer {
     this._lowHist.fill(0);
     this._midHist.fill(0);
     this._highHist.fill(0);
+    this.section = 'intro';
+    this.sectionChanged = false;
+    this._sectionFastEMA = this._sectionSlowEMA = this._sectionTrendEMA = 0;
+    this._kickDensity = 0;
+    this._sectionHoldUntil = 0;
+    this._dropCooldownUntil = 0;
+    this._sectionInitialized = false;
+  }
+
+  /**
+   * A MediaStream carrying the currently analysed audio (post-analyser tap),
+   * for combining with a canvas capture stream when recording a session.
+   * Returns null when nothing is connected.
+   */
+  getRecordingStream() {
+    return this._recordDest ? this._recordDest.stream : null;
   }
 
   /** Precompute logarithmic bin boundaries (35% sub-bass, 40% mids, 25% highs), sub-bin interpolation weights, and acoustic tilt */
@@ -463,6 +501,85 @@ export class AudioAnalyzer {
     } else {
       this.beat = false;
     }
+
+    this._detectSection(now, dt, energy, kickHit);
+  }
+
+  /**
+   * Coarse song-structure detector layered on top of the beat/energy signals
+   * above. It is a heuristic (fast/slow/trend EMAs of overall energy plus a
+   * decaying kick-rate counter), not a music-theoretic section analyser, but
+   * it is enough to notice build-ups and drops for the Auto-Director feature
+   * and the section badge in the dock.
+   */
+  _detectSection(now, dt, energy, kickHit) {
+    // Seed all three EMAs from the first real sample instead of ramping up
+    // from 0 — otherwise the fast EMA (0.35s) races ahead of the slow one
+    // (3s) for the first second or so of any track, producing a spurious
+    // "drop" the instant playback starts, regardless of the actual audio.
+    if (!this._sectionInitialized) {
+      this._sectionFastEMA = this._sectionSlowEMA = this._sectionTrendEMA = energy;
+      this._sectionInitialized = true;
+      return;
+    }
+
+    this._sectionFastEMA  += (energy - this._sectionFastEMA)  * (1 - Math.exp(-dt / 0.35));
+    this._sectionSlowEMA  += (energy - this._sectionSlowEMA)  * (1 - Math.exp(-dt / 3.0));
+    this._sectionTrendEMA += (this._sectionSlowEMA - this._sectionTrendEMA) * (1 - Math.exp(-dt / 8.0));
+    if (kickHit) this._kickDensity = Math.min(6, this._kickDensity + 1);
+    this._kickDensity *= Math.exp(-dt / 2.0);
+
+    // Relative (ratio) comparisons, not absolute energy units — tracks vary
+    // hugely in loudness/mastering and sensitivity setting, so a fixed
+    // absolute jump size either never fires on quieter mixes or never fires
+    // on already-hot masters. A ratio against the track's own recent
+    // baseline generalises across both.
+    const ratio  = this._sectionFastEMA / Math.max(0.03, this._sectionSlowEMA);
+    const rising = this._sectionSlowEMA - this._sectionTrendEMA; // positive while the baseline climbs
+    const quiet  = this._sectionSlowEMA < 0.10 && Math.abs(rising) < 0.01;
+
+    this.sectionChanged = false;
+
+    // Drop detection is checked unconditionally, ahead of the general dwell
+    // timer below. A build-up leads directly into a drop, so gating this
+    // behind the 'build' state's own dwell would routinely swallow the exact
+    // moment Auto-Director cares about — by the time the hold expired, the
+    // fast/slow averages would already have caught up with each other and
+    // the state would slide straight into 'peak' instead.
+    const isDrop = ratio > 1.3 && this._sectionFastEMA > 0.12 && (this._kickDensity > 0.6 || ratio > 1.6);
+    // Only counts as a fresh "drop" when arriving from a genuinely lower-energy
+    // state — otherwise a sustained loud section can noisily re-trigger every
+    // time the ratio bounces back over the threshold, flickering between
+    // 'drop' and 'peak' for as long as the loud section lasts.
+    const fromLower = this.section === 'intro' || this.section === 'build' || this.section === 'breakdown';
+    if (isDrop && fromLower && now >= this._dropCooldownUntil) {
+      this.section = 'drop';
+      this.sectionChanged = true;
+      this._sectionHoldUntil = now + 1.0;
+      this._dropCooldownUntil = now + 1.2; // still allows a genuine re-drop shortly after
+      return;
+    }
+
+    if (now < this._sectionHoldUntil) return;
+
+    let next = this.section;
+    if (this.section === 'drop' && this._sectionFastEMA > this._sectionSlowEMA * 0.85) {
+      next = 'peak';
+    } else if ((this.section === 'peak' || this.section === 'drop') && ratio < 0.75) {
+      next = 'breakdown';
+    } else if (rising > 0.012 && this._sectionSlowEMA > 0.08) {
+      next = 'build';
+    } else if (this.section === 'build' && ratio < 1.1 && rising < 0.004) {
+      next = 'peak';
+    } else if (quiet) {
+      next = 'intro';
+    }
+
+    if (next !== this.section) {
+      this.section = next;
+      this.sectionChanged = true;
+      this._sectionHoldUntil = now + 1.8;
+    }
   }
 
   /** Transient telemetry for UI, typography HUD, and advanced visualizers */
@@ -477,6 +594,8 @@ export class AudioAnalyzer {
       energy: this.energy,
       bpm: this.bpm,
       phase: this.phase,
+      section: this.section,
+      sectionChanged: this.sectionChanged,
       metadata: this.metadata,
     };
   }

@@ -56,10 +56,13 @@ export class ParticlesViz {
     this._mat.uniforms.uColorB.value.setRGB(...colorB);
   }
 
-  update(time, energy, beat) {
+  update(time, energy, beat, details = {}) {
     this._mat.uniforms.uTime.value    = time;
     this._mat.uniforms.uEnergy.value  = energy;
-    this._mat.uniforms.uBeat.value    = beat ? 1.0 : 0.0;
+    // Reactive spike on the detected beat; a small phase-predicted pre-swell otherwise.
+    const phase = details?.phase ?? 0;
+    const preBeat = Math.pow(Math.max(0, phase - 0.82) / 0.18, 2) * 0.3;
+    this._mat.uniforms.uBeat.value    = beat ? 1.0 : preBeat;
     this._points.rotation.y           = time * 0.07;
   }
 
