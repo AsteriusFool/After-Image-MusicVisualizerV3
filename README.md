@@ -49,7 +49,7 @@ System Audio (WASAPI loopback)
           ├── Bars          — 128 InstancedMesh boxes
           ├── Orb           — IcosahedronGeometry + simplex noise displacement
           ├── Particles     — 8 000 toroidal Points with per-particle frequency bands
-          ├── Morphing Forms, Neon Wormhole, EXC3 Motion — additional shader-driven modes
+          ├── Morphing Forms, Neon Wormhole, Kinetic Motion — additional shader-driven modes
           ├── Bass Impulse  — InstancedMesh shard field with spring/damping physics,
           │                   kick-triggered impulses, radius-clamped containment
           └── Live Shader   — user-editable GLSL rendered on a Shadertoy-style
@@ -108,7 +108,7 @@ Then commit and push the tracked media file normally.
 
 ## Features
 
-- **8 visualizers** — Bars, Orb, Particles, Morphing Forms, Neon Wormhole, EXC3 Motion,
+- **8 visualizers** — Bars, Orb, Particles, Morphing Forms, Neon Wormhole, Kinetic Motion,
   Bass Impulse, and Live Shader — cycled with number keys, the preset bank, or the
   Visualizer dropdown.
 - **Live Shader mode** — write and apply your own GLSL fragment shader on a full-screen
@@ -148,7 +148,7 @@ npm run build       # Windows NSIS installer → dist/
 | Control | Action |
 |---------|--------|
 | **Audio Source** button | Switch between system loopback and microphone |
-| **Visualizer** dropdown / preset bank | Choose Bars, Orb, Particles, Morphing Forms, Neon Wormhole, EXC3 Motion, Bass Impulse, or Live Shader |
+| **Visualizer** dropdown / preset bank | Choose Bars, Orb, Particles, Morphing Forms, Neon Wormhole, Kinetic Motion, Bass Impulse, or Live Shader |
 | **Color** dropdown | Choose Neon, Fire, Ocean, Aurora, Sunset, Ice, Toxic, or Candy |
 | **Sensitivity** slider | Scale FFT amplitude (0.1 – 4×) |
 | **CRT** button | Toggle the retro CRT scanline look |
@@ -193,7 +193,7 @@ MusicVisualizer/
     │   ├── particles.js
     │   ├── random.js          Morphing Forms
     │   ├── speaker.js         Neon Wormhole
-    │   ├── exc3.js            EXC3 Motion
+    │   ├── kinetic.js         Kinetic Motion
     │   ├── impulse.js         Bass Impulse — physics-driven shard field
     │   └── custom.js          Live Shader — user GLSL on a full-screen quad
     └── shaders/
@@ -202,7 +202,7 @@ MusicVisualizer/
         ├── particles.glsl.js
         ├── random.glsl.js
         ├── speaker.glsl.js
-        ├── exc3.glsl.js
+        ├── kinetic.glsl.js
         └── impulse.glsl.js
 ```
 
