@@ -7,8 +7,9 @@ import { TunnelViz }    from './viz/tunnel.js';
 import { AmbientEffects } from './effects.js';
 import { RandomViz }     from './viz/random.js';
 import { SpeakerViz }    from './viz/speaker.js';
-import { BabyViz }       from './viz/baby.js';
 import { Exc3Viz }       from './viz/exc3.js';
+import { ImpulseViz }    from './viz/impulse.js';
+import { CustomViz, DEFAULT_FRAGMENT_SOURCE } from './viz/custom.js';
 import { retroVertexShader, retroFragmentShader } from './shaders/retro.glsl.js';
 import { exc3PostVertexShader, exc3PostFragmentShader } from './shaders/exc3.glsl.js';
 
@@ -30,6 +31,7 @@ export class Visualizer {
     this._vizMode  = 'bars';
     this._theme    = 'neon';
     this._active   = null;
+    this._customShaderSource = DEFAULT_FRAGMENT_SOURCE;
 
     // Retro CRT grade — target is what the user asked for, amount eases toward it.
     this._retroTarget = 1;
@@ -176,6 +178,31 @@ export class Visualizer {
   }
 
   /**
+   * Applies a new fragment shader to the live-shader ("Live Shader" preset) mode.
+   * Safe to call any time; if that mode isn't active yet the source is kept
+   * and used the next time it's entered.
+   * @returns {{ok: boolean, error: (string|null)}}
+   */
+  setCustomShader(source) {
+    this._customShaderSource = source;
+    if (this._vizMode === 'custom' && this._active?.setShader) {
+      return this._active.setShader(source);
+    }
+    return { ok: true, error: null };
+  }
+
+  /** Reverts the live-shader mode to its built-in starter shader. */
+  resetCustomShader() {
+    return this.setCustomShader(DEFAULT_FRAGMENT_SOURCE);
+  }
+
+  /** Current live-shader fragment source, for prefilling the editor panel. */
+  getCustomShaderSource() {
+    return this._active?.getSource ? this._active.getSource() : this._customShaderSource;
+  }
+
+
+  /**
    * Call once per frame with the latest analyser output.
    * @param {Float32Array} bins      256-element normalised frequency array.
    * @param {number}       energy    Mean energy 0–1.
@@ -229,7 +256,7 @@ export class Visualizer {
       }
     }
 
-    if (this._vizMode !== 'exc3') {
+    if (this._vizMode !== 'exc3' && !this._active?.quadScene) {
       this._camera.position.set(
         this._baseCamPos.x + offsetX,
         this._baseCamPos.y + offsetY,
@@ -268,6 +295,14 @@ export class Visualizer {
         this._renderer.render(this._active.hudScene, this._active.hudCamera);
         this._renderer.autoClear = true;
       }
+    } else if (this._active?.quadScene && this._active?.quadCamera) {
+      // Live Shader mode owns a full-screen quad instead of anything in the
+      // shared 3D scene — render that in place of the usual scene/camera.
+      // Checked generically (not by mode name) so any future quad-based
+      // mode gets this for free.
+      this._renderer.setRenderTarget(this._sceneRT);
+      this._renderer.clear();
+      this._renderer.render(this._active.quadScene, this._active.quadCamera);
     } else {
       this._renderer.setRenderTarget(this._sceneRT);
       this._renderer.render(this._scene, this._camera);
@@ -319,11 +354,14 @@ export class Visualizer {
       case 'speaker':
         this._active = new SpeakerViz(this._scene, this._freqTex);
         break;
-      case 'baby':
-        this._active = new BabyViz(this._scene, this._freqTex);
-        break;
       case 'exc3':
         this._active = new Exc3Viz(this._scene, this._freqTex);
+        break;
+      case 'impulse':
+        this._active = new ImpulseViz(this._scene, this._freqTex);
+        break;
+      case 'custom':
+        this._active = new CustomViz(this._scene, this._freqTex, this._customShaderSource);
         break;
       default:
         this._active = new BarsViz(this._scene, this._freqTex);
@@ -333,6 +371,9 @@ export class Visualizer {
     this._effects?.setTheme(t.a, t.b);
     this._active.setTheme(t.a, t.b);
     this._setCameraForMode(mode);
+    // Newly-built modes (Live Shader in particular) need the current render
+    // resolution immediately, not just on the next window resize.
+    this._resizeRenderTargets();
   }
 
   _setCameraForMode(mode) {
@@ -352,6 +393,14 @@ export class Visualizer {
     } else if (mode === 'exc3') {
       this._scene.background = new THREE.Color(0x060608);
       this._baseCamPos.set(0, 0.8, 6.2);
+      this._baseCamLook.set(0, 0, 0);
+    } else if (mode === 'impulse') {
+      this._scene.background = null;
+      this._baseCamPos.set(0, 1.2, 8.5);
+      this._baseCamLook.set(0, 0, 0);
+    } else if (mode === 'custom') {
+      this._scene.background = new THREE.Color(0x05050a);
+      this._baseCamPos.set(0, 0, 7);
       this._baseCamLook.set(0, 0, 0);
     } else {
       this._scene.background = null;
@@ -394,6 +443,7 @@ export class Visualizer {
     this._postMaterial.uniforms.uTexel.value.set(1 / rw, 1 / rh);
     this._retroMaterial.uniforms.uResolution.value.set(rw, rh);
     this._exc3Material.uniforms.uResolution.value.set(rw, rh);
+    this._active?.setResolution?.(rw, rh);
   }
 
   _onResize() {

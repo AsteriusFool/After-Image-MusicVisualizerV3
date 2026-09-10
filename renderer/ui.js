@@ -9,10 +9,11 @@
  */
 
 import { THEMES } from './visualizer.js';
+import { loadLibrary, addShader, removeShader, renameShader, saveLastSource } from './shader-library.js';
 
 const SPECTRUM_BARS = 56;
 const IDLE_MS       = 2800;   // hide the dock this long after the last input
-const VIZ_ORDER     = ['bars', 'orb', 'particles', 'random', 'speaker', 'baby', 'exc3'];
+const VIZ_ORDER     = ['bars', 'orb', 'particles', 'random', 'speaker', 'exc3', 'impulse', 'custom'];
 
 const rgbToHex = ([r, g, b]) => {
   const c = n => Math.round(Math.min(1, Math.max(0, n)) * 255).toString(16).padStart(2, '0');
@@ -26,38 +27,28 @@ export class DockUI {
   constructor(handlers) {
     this._on = handlers;
 
-    this._root      = document.getElementById('dock');
-    this._zone      = document.getElementById('dock-zone');
-    this._peek      = document.getElementById('dock-peek');
-    this._statusEl  = document.getElementById('status');
-    this._dotEl     = document.getElementById('status-dot');
-    this._sensEl    = document.getElementById('sensitivity');
-    this._sensVal   = document.getElementById('sens-val');
-    this._flashEl   = document.getElementById('beat-flash');
-    this._hintEl    = document.getElementById('hint');
-    this._playBtn   = document.getElementById('btn-play-pause');
-    this._css       = document.documentElement.style;
+    const byId = id => document.getElementById(id);
+    this._root = byId('dock'); this._zone = byId('dock-zone'); this._peek = byId('dock-peek');
+    this._statusEl = byId('status'); this._dotEl = byId('status-dot');
+    this._sensEl = byId('sensitivity'); this._sensVal = byId('sens-val');
+    this._flashEl = byId('beat-flash'); this._hintEl = byId('hint');
+    this._playBtn = byId('btn-play-pause'); this._sectionTag = byId('section-tag');
+    this._shaderPanel = byId('shader-panel'); this._shaderSource = byId('shader-source');
+    this._shaderError = byId('shader-error'); this._shaderSaveName = byId('shader-save-name');
+    this._shaderLibraryEl = byId('shader-library'); this._shaderLibraryTrigger = byId('shader-library-trigger');
+    this._shaderLibraryCountEl = byId('shader-library-count'); this._shaderLibrarySearch = byId('shader-library-search');
+    this._css = document.documentElement.style;
 
-    this._collapsed   = false;   // toggled by the user (H / peek / hide button)
-    this._idle        = false;   // auto-hidden after inactivity
-    this._audioLive   = false;
-    this._openMenu    = null;
-    this._idleTimer   = 0;
-    this._hintTimer   = 0;
+    this._collapsed = false; this._idle = false; this._audioLive = false;
+    this._openMenu = null; this._idleTimer = 0; this._hintTimer = 0;
+    this._autoOn = false; this._lastSection = null; this._renamingShaderId = null;
+    this._energy = 0; this._beat = 0;
 
-    this._energy = 0;            // smoothed, for the accent glow
-    this._beat   = 0;            // decays each frame
-
-    this._buildSpectrum();
-    this._wireSource();
-    this._wirePlayPause();
-    this._wireMenus();
-    this._wirePresets();
-    this._wireSlider();
-    this._wireWindow();
-    this._wireRetro();
-    this._wireVisibility();
-    this._wireKeyboard();
+    this._buildSpectrum(); this._wireSource(); this._wirePlayPause();
+    this._wireMenus(); this._wirePresets(); this._wireSlider();
+    this._wireWindow(); this._wireRetro(); this._wireAuto();
+    this._wirePin(); this._wireRecord(); this._wireShaderEditor();
+    this._wireVisibility(); this._wireKeyboard();
 
     this.setTheme('neon');
     this._selectMenuItem('viz', 'bars');
@@ -67,6 +58,9 @@ export class DockUI {
   // ── Public API ──────────────────────────────────────────────────
 
   get sensitivity() { return parseFloat(this._sensEl.value); }
+
+  /** True when Auto-Director (auto-switch visuals on detected song drops) is on. */
+  get autoDirectorOn() { return this._autoOn; }
 
   /** Update play/pause button state and visibility on the panel. */
   setPlayState(isPlaying, canControl = true) {
@@ -103,34 +97,63 @@ export class DockUI {
   /** Reflect a programmatic visualizer change back into the menu. */
   syncViz(value) { this._selectMenuItem('viz', value); }
 
-  /** Reflect active audio source in the segmented control and toggle panel play button visibility. */
   syncSource(kind) {
     for (const b of document.querySelectorAll('#source-seg .seg-btn')) {
       const match = b.dataset.src === kind;
       b.classList.toggle('active', match);
       b.setAttribute('aria-pressed', String(match));
     }
-    // Only appear if the user chose the file option
     this.setPlayState(this._isPlaying ?? true, kind === 'file');
   }
 
-  /** Update accent CSS variables + the color menu selection. */
   setTheme(name) {
     const t = THEMES[name];
     if (!t) return;
-    const a = rgbToHex(t.a);
-    const b = rgbToHex(t.b);
-    const mix = rgbToHex(t.a.map((v, i) => (v + t.b[i]) / 2));
-    this._css.setProperty('--acc-a', a);
-    this._css.setProperty('--acc-b', b);
-    this._css.setProperty('--acc-mix', mix);
+    this._css.setProperty('--acc-a', rgbToHex(t.a));
+    this._css.setProperty('--acc-b', rgbToHex(t.b));
+    this._css.setProperty('--acc-mix', rgbToHex(t.a.map((v, i) => (v + t.b[i]) / 2)));
     this._selectMenuItem('theme', name);
   }
 
-  /** Called every animation frame from app.js. */
+  /** Advances to the next (or, with step -1, previous) visualizer in the preset order. */
+  cycleViz(step = 1) {
+    const cur = this._menus.viz.pop.querySelector('[aria-checked="true"]')?.dataset.value ?? VIZ_ORDER[0];
+    const idx = VIZ_ORDER.indexOf(cur);
+    const next = VIZ_ORDER[(idx + step + VIZ_ORDER.length) % VIZ_ORDER.length];
+    this.syncViz(next); this._on.onViz(next);
+    return next;
+  }
+
+  cycleTheme(step = 1) {
+    const names = Object.keys(THEMES);
+    const cur = this._menus.theme.pop.querySelector('[aria-checked="true"]')?.dataset.value ?? 'neon';
+    const idx = names.indexOf(cur);
+    const next = names[(idx + step + names.length) % names.length];
+    this.setTheme(next); this._on.onTheme(next);
+    this._flashHint(`Color · <b>${next}</b>`);
+    return next;
+  }
+
+  setSectionTag(section) {
+    if (!this._sectionTag || section === this._lastSection) return;
+    this._lastSection = section;
+    this._sectionTag.textContent = section ? `· ${section.toUpperCase()}` : '';
+  }
+
+  setRecordingState(active) {
+    this._recBtn?.classList.toggle('recording', !!active);
+    this._recBtn?.classList.toggle('active', !!active);
+    this._recBtn?.setAttribute('aria-pressed', String(!!active));
+  }
+
+  setShaderSource(source) {
+    if (this._shaderSource) this._shaderSource.value = source ?? '';
+    if (this._shaderError) this._shaderError.textContent = '';
+    this._renderShaderLibrary();
+  }
+
   react(bins, energy, beat, details = {}) {
     const kick = details.kick ?? (beat ? 1 : 0);
-    // Smoothed energy drives the dock's ambient glow.
     this._energy += (Math.min(energy * 2.2, 1) - this._energy) * 0.12;
     this._beat *= 0.86;
     if (beat || kick > 0.4) {
@@ -142,25 +165,20 @@ export class DockUI {
     this._css.setProperty('--energy', this._energy.toFixed(3));
     this._css.setProperty('--beat', this._beat.toFixed(3));
 
-    // Mini spectrum — skip the DOM work while the dock is off-screen.
     if (this._collapsed || this._idle) return;
     for (let i = 0; i < SPECTRUM_BARS; i++) {
       const src = Math.floor((i / SPECTRUM_BARS) * (bins.length - 1));
       let v = 0;
       for (let j = src; j < src + 4 && j < bins.length; j++) v = Math.max(v, bins[j]);
       const prev = this._smooth[i];
-      // fast attack, slow release
       this._smooth[i] = v > prev ? v : prev * 0.82 + v * 0.18;
       this._sbars[i].style.transform = `scaleY(${(0.04 + this._smooth[i] * 0.96).toFixed(3)})`;
     }
   }
 
-  // ── Build helpers ──────────────────────────────────────────────
-
   _buildSpectrum() {
     const wrap = document.getElementById('dock-spectrum');
-    this._sbars  = [];
-    this._smooth = new Float32Array(SPECTRUM_BARS);
+    this._sbars = []; this._smooth = new Float32Array(SPECTRUM_BARS);
     for (let i = 0; i < SPECTRUM_BARS; i++) {
       const bar = document.createElement('span');
       bar.className = 'sbar';
@@ -172,9 +190,8 @@ export class DockUI {
   _wireSource() {
     for (const btn of document.querySelectorAll('#source-seg .seg-btn')) {
       btn.addEventListener('click', () => {
-        const src = btn.dataset.src;
-        this.syncSource(src);
-        this._on.onSource(src);
+        this.syncSource(btn.dataset.src);
+        this._on.onSource(btn.dataset.src);
       });
     }
   }
@@ -190,6 +207,9 @@ export class DockUI {
     this._menus = {
       viz:   { pop: document.getElementById('viz-pop'),   trigger: document.getElementById('viz-trigger'),   valueEl: document.getElementById('viz-value') },
       theme: { pop: document.getElementById('theme-pop'), trigger: document.getElementById('theme-trigger'), valueEl: document.getElementById('theme-value') },
+      // No menuitem children (it's a search + list, not a radio menu) — the
+      // generic open/close/outside-click/Escape handling below still applies.
+      shaderLibrary: { pop: document.getElementById('shader-library-pop'), trigger: document.getElementById('shader-library-trigger'), valueEl: null },
     };
 
     for (const [key, m] of Object.entries(this._menus)) {
@@ -209,16 +229,25 @@ export class DockUI {
       }
     }
 
-    document.addEventListener('click', () => this._toggleMenu(null));
+    // Close on outside click only — a click inside an open popover (e.g. the
+    // shader library's rename/delete buttons or its search box) must not
+    // also bubble up and slam the whole popover shut. Use composedPath()
+    // (the path captured at dispatch time) rather than e.target.closest():
+    // the rename/delete click handlers re-render the list synchronously
+    // (before this listener runs), which detaches the clicked button from
+    // the tree — closest() on a detached node can no longer walk up to
+    // find the popover, so it would wrongly look like an outside click.
+    document.addEventListener('click', e => {
+      const path = e.composedPath ? e.composedPath() : [];
+      if (path.some(el => el.classList?.contains?.('menu-pop'))) return;
+      this._toggleMenu(null);
+    });
     for (const m of Object.values(this._menus)) {
       m.pop.addEventListener('keydown', e => {
         const items = [...m.pop.querySelectorAll('[role^="menuitem"]')];
         const index = items.indexOf(document.activeElement);
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          this._toggleMenu(null);
-          m.trigger.focus();
-        } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+        if (e.key === 'Escape') { e.preventDefault(); this._toggleMenu(null); m.trigger.focus(); }
+        else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
           e.preventDefault();
           const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1
             : (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
@@ -237,7 +266,8 @@ export class DockUI {
     this._openMenu = key;
     if (key) {
       this._markActivity();
-      this._menus[key].pop.querySelector('[aria-checked="true"], [role^="menuitem"]')?.focus();
+      const pop = this._menus[key].pop;
+      (pop.querySelector('[aria-checked="true"], [role^="menuitem"]') || pop.querySelector('.shader-library-search'))?.focus();
     }
   }
 
@@ -261,6 +291,15 @@ export class DockUI {
           document.getElementById('stage-description').textContent = btn.dataset.description;
         }
       });
+      if (this._shaderPanel) {
+        const isCustom = value === 'custom';
+        this._shaderPanel.hidden = !isCustom;
+        if (isCustom) this._on.onCustomMode?.();
+        // Leaving the mode hides the panel via CSS regardless, but without this
+        // the library popover would still think it's open (aria-expanded, the
+        // outside-click handler) and silently reappear next time it's reachable.
+        else if (this._openMenu === 'shaderLibrary') this._toggleMenu(null);
+      }
     }
   }
 
@@ -295,26 +334,46 @@ export class DockUI {
 
   _wireWindow() {
     const api = window.electronAPI;
-    document.getElementById('btn-minimize') ?.addEventListener('click', () => api?.windowMinimize());
-    document.getElementById('btn-maximize') ?.addEventListener('click', () => api?.windowMaximize());
-    document.getElementById('btn-close')    ?.addEventListener('click', () => api?.windowClose());
+    document.getElementById('btn-minimize')?.addEventListener('click', () => api?.windowMinimize());
+    document.getElementById('btn-maximize')?.addEventListener('click', () => api?.windowMaximize());
+    document.getElementById('btn-close')?.addEventListener('click', () => api?.windowClose());
     document.getElementById('btn-fullscreen')?.addEventListener('click', () => this._toggleFullscreen());
-
     if (!api) document.getElementById('chrome-zone').style.display = 'none';
+
+    const setFsState = isFs => {
+      const active = !!isFs;
+      document.body.classList.toggle('is-fullscreen', active);
+      document.getElementById('btn-fullscreen')?.setAttribute('aria-pressed', String(active));
+    };
+
+    api?.onFullscreenChange?.(setFsState);
+    api?.windowIsFullscreen?.().then(setFsState);
+    document.addEventListener('fullscreenchange', () => setFsState(!!document.fullscreenElement));
+    window.addEventListener('resize', () => {
+      if (api?.windowIsFullscreen) api.windowIsFullscreen().then(setFsState);
+      else setFsState(!!document.fullscreenElement || (window.innerHeight >= screen.height && window.innerWidth >= screen.width));
+    });
   }
 
   async _toggleFullscreen() {
-    if (window.electronAPI) return window.electronAPI.windowFullscreenToggle();
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await document.documentElement.requestFullscreen();
-    } catch {
-      this._flashHint('Fullscreen is unavailable in this browser.');
+    if (window.electronAPI) {
+      try {
+        const isFs = await window.electronAPI.windowFullscreenToggle();
+        if (typeof isFs === 'boolean') {
+          document.body.classList.toggle('is-fullscreen', isFs);
+          document.getElementById('btn-fullscreen')?.setAttribute('aria-pressed', String(isFs));
+        }
+      } catch (err) { console.error('[ui] windowFullscreenToggle error:', err); }
+      return;
     }
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); document.body.classList.remove('is-fullscreen'); }
+      else { await document.documentElement.requestFullscreen(); document.body.classList.add('is-fullscreen'); }
+    } catch { this._flashHint('Fullscreen is unavailable in this browser.'); }
   }
 
   _wireRetro() {
-    this._retroOn  = true;
+    this._retroOn = true;
     this._retroBtn = document.getElementById('btn-retro');
     this._retroBtn?.addEventListener('click', () => { this._toggleRetro(); this._markActivity(); });
   }
@@ -327,71 +386,235 @@ export class DockUI {
     this._flashHint(`Retro CRT · <b>${this._retroOn ? 'on' : 'off'}</b>`);
   }
 
+  _wireAuto() {
+    this._autoBtn = document.getElementById('btn-auto');
+    this._autoBtn?.addEventListener('click', () => {
+      this._autoOn = !this._autoOn;
+      this._autoBtn.classList.toggle('active', this._autoOn);
+      this._autoBtn.setAttribute('aria-pressed', String(this._autoOn));
+      this._flashHint(`Auto-Director · <b>${this._autoOn ? 'on' : 'off'}</b>`);
+      this._markActivity();
+    });
+  }
+
+  _wirePin() {
+    this._pinBtn = document.getElementById('btn-pin');
+    this._pinBtn?.addEventListener('click', async () => {
+      const on = await this._on.onPin?.();
+      this._pinBtn.classList.toggle('active', !!on);
+      this._pinBtn.setAttribute('aria-pressed', String(!!on));
+      this._flashHint(`Always on top · <b>${on ? 'on' : 'off'}</b>`);
+      this._markActivity();
+    });
+  }
+
+  _wireRecord() {
+    this._recBtn = document.getElementById('btn-record');
+    this._recBtn?.addEventListener('click', () => {
+      this._on.onRecordToggle?.();
+      this._markActivity();
+    });
+  }
+
+  _wireShaderEditor() {
+    document.getElementById('btn-shader-apply')?.addEventListener('click', () => this._applyShader());
+    document.getElementById('btn-shader-reset')?.addEventListener('click', () => {
+      const res = this._on.onShaderReset?.();
+      if (res && !res.ok) {
+        this._shaderError.textContent = res.error || 'Could not reset shader.';
+      } else {
+        this._flashHint('Shader <b>reset</b>');
+        saveLastSource(this._shaderSource?.value ?? '');
+      }
+    });
+    document.getElementById('btn-shader-save')?.addEventListener('click', () => this._saveShader());
+    this._shaderSaveName?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); this._saveShader(); }
+    });
+    this._shaderSource?.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); this._applyShader(); }
+    });
+    // The search box lives inside the popover's keydown listener (menu arrow-key
+    // navigation, wired in _wireMenus) — stop those keys short of it so Home/End/
+    // arrows still move the text cursor instead of being treated as menu commands.
+    this._shaderLibrarySearch?.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { this._toggleMenu(null); this._shaderLibraryTrigger?.focus(); }
+    });
+    this._shaderLibrarySearch?.addEventListener('input', () => this._renderShaderLibrary());
+    // Delegated so newly-rendered rows (added/removed by save/rename/delete) need no re-wiring.
+    this._shaderLibraryEl?.addEventListener('click', e => {
+      const row = e.target.closest('.shader-lib-row');
+      if (!row) return;
+      const { id } = row.dataset;
+      if (e.target.closest('.shader-lib-delete')) {
+        removeShader(id);
+        this._renderShaderLibrary();
+      } else if (e.target.closest('.shader-lib-rename')) {
+        this._renamingShaderId = id;
+        this._renderShaderLibrary();
+      } else if (e.target.closest('.shader-lib-load')) {
+        this._loadSavedShader(id);
+      }
+    });
+    this._renderShaderLibrary();
+  }
+
+  _applyShader() {
+    const src = this._shaderSource?.value ?? '';
+    const res = this._on.onShaderApply?.(src);
+    if (res && !res.ok) {
+      if (this._shaderError) this._shaderError.textContent = res.error || 'Shader failed to compile.';
+    } else {
+      if (this._shaderError) this._shaderError.textContent = '';
+      this._flashHint('Shader <b>applied</b>');
+      saveLastSource(src);
+      this._renderShaderLibrary();
+    }
+  }
+
+  _saveShader() {
+    const src = this._shaderSource?.value ?? '';
+    if (!src.trim()) return;
+    const name = this._shaderSaveName?.value ?? '';
+    addShader(name, src);
+    if (this._shaderSaveName) this._shaderSaveName.value = '';
+    this._flashHint('Shader <b>saved</b>');
+    this._renderShaderLibrary();
+  }
+
+  _loadSavedShader(id) {
+    const entry = loadLibrary().find(e => e.id === id);
+    if (!entry) return;
+    if (this._shaderSource) this._shaderSource.value = entry.source;
+    const res = this._on.onShaderApply?.(entry.source);
+    if (res && !res.ok) {
+      if (this._shaderError) this._shaderError.textContent = res.error || 'Shader failed to compile.';
+    } else {
+      if (this._shaderError) this._shaderError.textContent = '';
+      this._flashHint(`Loaded <b>${entry.name}</b>`);
+      saveLastSource(entry.source);
+      // Closing the outside-click listener no longer does this for us (rename/
+      // delete/search need clicks inside the popover to NOT close it) — so a
+      // successful load closes it explicitly, matching viz/theme menu-item feel.
+      this._toggleMenu(null);
+    }
+    this._renderShaderLibrary();
+  }
+
+  /** Renames a saved shader in place, replacing its row with a text input until Enter/blur (or Escape to cancel). */
+  _commitShaderRename(id, input, cancelled) {
+    if (!cancelled) renameShader(id, input.value);
+    this._renamingShaderId = null;
+    this._renderShaderLibrary();
+  }
+
+  /** Rebuilds the saved-shaders list, filtered by the search box and highlighting the current editor text. */
+  _renderShaderLibrary() {
+    const all = loadLibrary();
+    if (this._shaderLibraryCountEl) {
+      this._shaderLibraryCountEl.textContent = all.length ? ` (${all.length})` : '';
+    }
+    if (!this._shaderLibraryEl) return;
+
+    const query = (this._shaderLibrarySearch?.value ?? '').trim().toLowerCase();
+    const list = query ? all.filter(e => e.name.toLowerCase().includes(query)) : all;
+    const current = this._shaderSource?.value ?? '';
+    this._shaderLibraryEl.innerHTML = '';
+
+    if (!list.length) {
+      const empty = document.createElement('div');
+      empty.className = 'shader-lib-empty';
+      empty.textContent = all.length ? 'No matches.' : 'No saved shaders yet.';
+      this._shaderLibraryEl.appendChild(empty);
+      return;
+    }
+
+    for (const entry of list) {
+      const row = document.createElement('div');
+      row.className = 'shader-lib-row' + (entry.source === current ? ' active' : '');
+      row.dataset.id = entry.id;
+
+      if (entry.id === this._renamingShaderId) {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'shader-lib-rename-input';
+        input.value = entry.name;
+        input.maxLength = 40;
+        let done = false;
+        const commitOnce = cancelled => {
+          if (done) return;
+          done = true;
+          this._commitShaderRename(entry.id, input, cancelled);
+        };
+        input.addEventListener('keydown', e => {
+          e.stopPropagation();
+          if (e.key === 'Enter') { e.preventDefault(); commitOnce(false); }
+          else if (e.key === 'Escape') { e.preventDefault(); commitOnce(true); }
+        });
+        input.addEventListener('blur', () => commitOnce(false));
+        row.appendChild(input);
+        this._shaderLibraryEl.appendChild(row);
+        input.focus();
+        input.select();
+        continue;
+      }
+
+      const load = document.createElement('button');
+      load.className = 'shader-lib-load';
+      load.title = 'Load & apply';
+      load.textContent = entry.name; // user-authored text — never through innerHTML
+
+      const rename = document.createElement('button');
+      rename.className = 'shader-lib-rename';
+      rename.title = 'Rename';
+      rename.setAttribute('aria-label', 'Rename saved shader');
+      rename.textContent = '✎';
+
+      const del = document.createElement('button');
+      del.className = 'shader-lib-delete';
+      del.title = 'Delete';
+      del.setAttribute('aria-label', 'Delete saved shader');
+      del.textContent = '×';
+
+      row.append(load, rename, del);
+      this._shaderLibraryEl.appendChild(row);
+    }
+  }
+
   _wireVisibility() {
     document.getElementById('btn-hide-dock').addEventListener('click', () => this._setCollapsed(true));
     this._peek.addEventListener('click', e => { e.stopPropagation(); this._setCollapsed(false); });
-
-    const activity = () => this._markActivity();
-    window.addEventListener('mousemove', activity);
-    this._root.addEventListener('focusin', activity);
-    window.addEventListener('mousedown', activity);
-    window.addEventListener('wheel', activity, { passive: true });
-    this._root.addEventListener('mouseenter', () => { clearTimeout(this._idleTimer); });
+    const act = () => this._markActivity();
+    ['mousemove', 'mousedown', 'wheel'].forEach(ev => window.addEventListener(ev, act, ev === 'wheel' ? { passive: true } : undefined));
+    this._root.addEventListener('focusin', act);
+    this._root.addEventListener('mouseenter', () => clearTimeout(this._idleTimer));
     this._root.addEventListener('mouseleave', () => this._scheduleIdle());
   }
 
   _wireKeyboard() {
     window.addEventListener('keydown', e => {
-      if (e.target instanceof HTMLInputElement) return;
-      switch (e.key.toLowerCase()) {
-        case 'h':
-          this._setCollapsed(!this._collapsed);
-          break;
-        case ' ':
-        case 'space':
-          if (this._on.onPlayPause) {
-            e.preventDefault();
-            this._on.onPlayPause();
-          }
-          break;
-        case 'f':
-          this._toggleFullscreen();
-          break;
-        case 'r':
-          this._toggleRetro();
-          break;
-        case 'c': {
-          const names = Object.keys(THEMES);
-          const cur = this._menus.theme.pop.querySelector('[aria-checked="true"]')?.dataset.value ?? 'neon';
-          const next = names[(names.indexOf(cur) + 1) % names.length];
-          this.setTheme(next);
-          this._on.onTheme(next);
-          this._flashHint(`Color · <b>${next}</b>`);
-          break;
-        }
-        case '[':
-        case ']': {
-          const step = e.key === ']' ? 0.15 : -0.15;
-          this._sensEl.value = Math.min(4, Math.max(0.1, this.sensitivity + step)).toFixed(2);
-          this._syncSlider();
-          this._flashHint(`Sensitivity · <b>${this.sensitivity.toFixed(1)}×</b>`);
-          break;
-        }
-        default:
-          if (e.key >= '1' && e.key <= String(VIZ_ORDER.length)) {
-            const value = VIZ_ORDER[+e.key - 1];
-            this.syncViz(value);
-            this._on.onViz(value);
-            this._flashHint(`<b>${this._menus.viz.valueEl.textContent}</b>`);
-          } else {
-            return;
-          }
-      }
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const k = e.key.toLowerCase();
+      if (k === 'h') this._setCollapsed(!this._collapsed);
+      else if (k === ' ' || k === 'space') { if (this._on.onPlayPause) { e.preventDefault(); this._on.onPlayPause(); } }
+      else if (k === 'f') this._toggleFullscreen();
+      else if (k === 'escape') { if (document.body.classList.contains('is-fullscreen')) { e.preventDefault(); this._toggleFullscreen(); } }
+      else if (k === 'r') this._toggleRetro();
+      else if (k === 'c') this.cycleTheme(1);
+      else if (k === '[' || k === ']') {
+        const step = k === ']' ? 0.15 : -0.15;
+        this._sensEl.value = Math.min(4, Math.max(0.1, this.sensitivity + step)).toFixed(2);
+        this._syncSlider();
+        this._flashHint(`Sensitivity · <b>${this.sensitivity.toFixed(1)}×</b>`);
+      } else if (e.key >= '1' && e.key <= String(VIZ_ORDER.length)) {
+        const value = VIZ_ORDER[+e.key - 1];
+        this.syncViz(value); this._on.onViz(value);
+        this._flashHint(`<b>${this._menus.viz.valueEl.textContent}</b>`);
+      } else { return; }
       this._markActivity();
     });
   }
-
-  // ── Visibility state machine ───────────────────────────────────
 
   _setCollapsed(state) {
     this._collapsed = state;

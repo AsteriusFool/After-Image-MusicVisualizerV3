@@ -9,8 +9,6 @@
 </head>
 <body>
   <canvas id="canvas" aria-label="Music visualization"></canvas>
-  <img id="baby-gif" src="" alt="">
-  <canvas id="baby-canvas"></canvas>
   <div id="beat-flash" aria-hidden="true"></div>
   <div id="drop-overlay" aria-hidden="true">
     <div class="drop-card">
@@ -52,7 +50,7 @@
     <section id="dock" data-hidden="false" aria-label="Visualizer controls">
       <div class="console-top">
         <span class="eyebrow"><i class="pilot" aria-hidden="true"></i> VISUAL ENGINE</span>
-        <span class="console-hint">Select a form <span aria-hidden="true">/</span> keys 1&#8211;7</span>
+        <span class="console-hint">Select a form <span aria-hidden="true">/</span> keys 1&#8211;8</span>
         <button class="text-btn" id="btn-hide-dock" title="Hide controls (H)">Hide panel <kbd>H</kbd></button>
       </div>
 
@@ -62,8 +60,9 @@
 <button class="preset" data-preset="particles" data-label="Particles" data-description="Orbiting cloud" aria-pressed="false" title="Particles (3)"><span class="preset-number">03</span><svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="24" rx="19" ry="10" transform="rotate(-30 24 24)"/><ellipse cx="24" cy="24" rx="10" ry="19" transform="rotate(-30 24 24)"/><circle cx="24" cy="24" r="2"/></svg><span class="preset-name">Particles</span><span class="preset-description">Orbiting cloud</span></button>
 <button class="preset" data-preset="random" data-label="Morphing Forms" data-description="Evolving geometry" aria-pressed="false" title="Morphing Forms (4)"><span class="preset-number">04</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="m24 5 18 29-33 5 15-34Z"/><circle cx="24" cy="24" r="15"/></svg><span class="preset-name">Morphing Forms</span><span class="preset-description">Evolving geometry</span></button>
 <button class="preset" data-preset="speaker" data-label="Neon Wormhole" data-description="Through the throat" aria-pressed="false" title="Neon Wormhole (5)"><span class="preset-number">05</span><svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="24" rx="19" ry="17"/><ellipse cx="25" cy="24" rx="13" ry="12"/><ellipse cx="27" cy="24" rx="7" ry="7"/><circle cx="29" cy="24" r="2"/></svg><span class="preset-name">Neon Wormhole</span><span class="preset-description">Through the throat</span></button>
-<button class="preset" data-preset="baby" data-label="Dancing Baby" data-description="A cult classic" aria-pressed="false" title="Dancing Baby (6)"><span class="preset-number">06</span><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="25" cy="11" r="5"/><path d="m24 17-3 13 10 10m-10-10-9 9m11-18-11 1-4-6m16 4 9 7 7-6"/></svg><span class="preset-name">Dancing Baby</span><span class="preset-description">A cult classic</span></button>
-<button class="preset" data-preset="exc3" data-label="EXC3 Motion" data-description="Kinetic typography" aria-pressed="false" title="EXC3 Motion (7)"><span class="preset-number">07</span><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="10" width="28" height="28" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 24h16M24 16v16M14 14l20 20" stroke="currentColor" stroke-width="1.8"/></svg><span class="preset-name">EXC3 Motion</span><span class="preset-description">Kinetic typography</span></button>
+<button class="preset" data-preset="exc3" data-label="EXC3 Motion" data-description="Kinetic typography" aria-pressed="false" title="EXC3 Motion (6)"><span class="preset-number">06</span><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="10" width="28" height="28" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 24h16M24 16v16M14 14l20 20" stroke="currentColor" stroke-width="1.8"/></svg><span class="preset-name">EXC3 Motion</span><span class="preset-description">Kinetic typography</span></button>
+<button class="preset" data-preset="impulse" data-label="Bass Impulse" data-description="Physics-punched shards" aria-pressed="false" title="Bass Impulse (7)"><span class="preset-number">07</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6v9M24 33v9M6 24h9M33 24h9M13 13l6 6M29 29l6 6M35 13l-6 6M19 29l-6 6"/><circle cx="24" cy="24" r="6"/></svg><span class="preset-name">Bass Impulse</span><span class="preset-description">Physics-punched shards</span></button>
+<button class="preset" data-preset="custom" data-label="Live Shader" data-description="Write your own GLSL" aria-pressed="false" title="Live Shader (8)"><span class="preset-number">08</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M18 15 8 24l10 9M30 15l10 9-10 9M27 12l-6 24"/></svg><span class="preset-name">Live Shader</span><span class="preset-description">Write your own GLSL</span></button>
       </nav>
 
       <div class="dock-body">
@@ -83,7 +82,7 @@
         </section>
 
         <section class="control-cell signal-cell" aria-label="Audio signal">
-          <div class="signal-heading"><span class="eyebrow">SIGNAL</span><span class="meter-label">LOW &#9472; HIGH</span></div>
+          <div class="signal-heading"><span class="eyebrow">SIGNAL <span id="section-tag" class="section-tag"></span></span><span class="meter-label">LOW &#9472; HIGH</span></div>
           <div id="dock-spectrum" aria-hidden="true"></div>
           <div class="status" id="status-wrap" role="status"><span id="status-dot" class="dot"></span><span id="status">Choose an audio source</span></div>
         </section>
@@ -116,13 +115,39 @@
           <span class="eyebrow">04 / FINISH</span>
           <div class="finish-buttons">
             <button class="icon-btn active" id="btn-retro" title="Retro CRT look (R)" aria-pressed="true"><span class="switch-light" aria-hidden="true"></span>CRT</button>
+            <button class="icon-btn compact" id="btn-auto" title="Auto-Director: switch visuals on song drops" aria-pressed="false"><span class="switch-light" aria-hidden="true"></span>AUTO</button>
+            <button class="icon-btn compact" id="btn-pin" title="Keep window always on top" aria-pressed="false"><span class="switch-light" aria-hidden="true"></span>PIN</button>
+            <button class="icon-btn compact" id="btn-record" title="Record this session to video" aria-pressed="false"><span class="rec-dot" aria-hidden="true"></span>REC</button>
             <button class="icon-btn" id="btn-fullscreen" title="Fullscreen (F)" aria-label="Toggle fullscreen">&#9974;</button>
           </div>
         </section>
       </div>
+      <section class="shader-panel" id="shader-panel" hidden aria-label="Live shader editor">
+        <div class="shader-panel-head">
+          <span class="eyebrow">LIVE SHADER &#8212; fragment (GLSL ES 1.00)</span>
+          <span class="shader-hint">Ctrl+Enter to apply</span>
+        </div>
+        <textarea id="shader-source" spellcheck="false" wrap="off"></textarea>
+        <div class="shader-panel-foot">
+          <button class="text-btn" id="btn-shader-apply">Apply shader</button>
+          <button class="text-btn" id="btn-shader-reset">Reset to default</button>
+          <input type="text" id="shader-save-name" class="shader-save-name" placeholder="Name this shader&#8230;" maxlength="40">
+          <button class="text-btn" id="btn-shader-save">Save</button>
+          <div class="menu" id="shader-library-menu">
+            <button class="menu-trigger shader-library-trigger" id="shader-library-trigger" aria-haspopup="menu" aria-controls="shader-library-pop" aria-expanded="false">
+              Library<span id="shader-library-count" class="shader-library-count"></span><span class="caret" aria-hidden="true">&#8963;</span>
+            </button>
+            <div class="menu-pop shader-library-pop" id="shader-library-pop" role="menu" aria-label="Saved shaders" hidden>
+              <input type="text" id="shader-library-search" class="shader-library-search" placeholder="Search saved shaders&#8230;">
+              <div class="shader-library" id="shader-library"></div>
+            </div>
+          </div>
+          <span id="shader-error" role="status"></span>
+        </div>
+      </section>
       <footer class="console-footer"><span>AFTERIMAGE <span class="footer-slash">/</span> MUSIC VISUALIZER</span><span>Made to disappear. <kbd>H</kbd> hide &#183; <kbd>F</kbd> fullscreen</span></footer>
       <!-- Kept for the existing menu controller and keyboard shortcuts. -->
-      <div id="viz-menu" hidden><button id="viz-trigger" aria-expanded="false"><span id="viz-value">Bars</span></button><div id="viz-pop" role="menu" hidden><button role="menuitemradio" data-value="bars">Bars</button><button role="menuitemradio" data-value="orb">Orb</button><button role="menuitemradio" data-value="particles">Particles</button><button role="menuitemradio" data-value="random">Morphing Forms</button><button role="menuitemradio" data-value="speaker">Neon Wormhole</button><button role="menuitemradio" data-value="baby">Dancing Baby</button><button role="menuitemradio" data-value="exc3">EXC3 Motion</button></div></div>
+      <div id="viz-menu" hidden><button id="viz-trigger" aria-expanded="false"><span id="viz-value">Bars</span></button><div id="viz-pop" role="menu" hidden><button role="menuitemradio" data-value="bars">Bars</button><button role="menuitemradio" data-value="orb">Orb</button><button role="menuitemradio" data-value="particles">Particles</button><button role="menuitemradio" data-value="random">Morphing Forms</button><button role="menuitemradio" data-value="speaker">Neon Wormhole</button><button role="menuitemradio" data-value="exc3">EXC3 Motion</button><button role="menuitemradio" data-value="impulse">Bass Impulse</button><button role="menuitemradio" data-value="custom">Live Shader</button></div></div>
     </section>
     <button id="dock-peek" title="Show controls (H)" aria-label="Show controls">afterimage <span>&#8593; <kbd>H</kbd></span></button>
   </div>
