@@ -10,6 +10,7 @@ import { SpeakerViz }    from './viz/speaker.js';
 import { Exc3Viz }       from './viz/exc3.js';
 import { ImpulseViz }    from './viz/impulse.js';
 import { CustomViz, DEFAULT_FRAGMENT_SOURCE } from './viz/custom.js';
+import { AuraViz } from './viz/aura.js';
 import { retroVertexShader, retroFragmentShader } from './shaders/retro.glsl.js';
 import { exc3PostVertexShader, exc3PostFragmentShader } from './shaders/exc3.glsl.js';
 
@@ -32,6 +33,8 @@ export class Visualizer {
     this._theme    = 'neon';
     this._active   = null;
     this._customShaderSource = DEFAULT_FRAGMENT_SOURCE;
+    this._auraPalette = null;
+    this._auraImage = null;
 
     // Retro CRT grade — target is what the user asked for, amount eases toward it.
     this._retroTarget = 1;
@@ -201,6 +204,21 @@ export class Visualizer {
     return this._active?.getSource ? this._active.getSource() : this._customShaderSource;
   }
 
+  /** Sets Album Aura's live palette (each color a 0-1 RGB triple), e.g. from the current Spotify track's cover art. */
+  setAuraPalette(colorA, colorB, colorC) {
+    this._auraPalette = { colorA, colorB, colorC };
+    if (this._vizMode === 'aura' && this._active?.setPalette) {
+      this._active.setPalette(colorA, colorB, colorC);
+    }
+  }
+
+  /** Sets Album Aura's cover-art image (an HTMLImageElement) — shown warped/tinted inside the mode itself, not as a separate visualizer. */
+  setAuraArt(image) {
+    this._auraImage = image;
+    if (this._vizMode === 'aura' && this._active?.setAlbumArt) {
+      this._active.setAlbumArt(image);
+    }
+  }
 
   /**
    * Call once per frame with the latest analyser output.
@@ -363,6 +381,11 @@ export class Visualizer {
       case 'custom':
         this._active = new CustomViz(this._scene, this._freqTex, this._customShaderSource);
         break;
+      case 'aura':
+        this._active = new AuraViz(this._scene, this._freqTex);
+        if (this._auraPalette) this._active.setPalette(this._auraPalette.colorA, this._auraPalette.colorB, this._auraPalette.colorC);
+        if (this._auraImage) this._active.setAlbumArt(this._auraImage);
+        break;
       default:
         this._active = new BarsViz(this._scene, this._freqTex);
         break;
@@ -400,6 +423,10 @@ export class Visualizer {
       this._baseCamLook.set(0, 0, 0);
     } else if (mode === 'custom') {
       this._scene.background = new THREE.Color(0x05050a);
+      this._baseCamPos.set(0, 0, 7);
+      this._baseCamLook.set(0, 0, 0);
+    } else if (mode === 'aura') {
+      this._scene.background = new THREE.Color(0x050508);
       this._baseCamPos.set(0, 0, 7);
       this._baseCamLook.set(0, 0, 0);
     } else {

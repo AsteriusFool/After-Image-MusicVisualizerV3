@@ -55,7 +55,7 @@ body.audio-live .input-guide{opacity:0}
 .text-btn{margin-left:auto;border:0;background:none;font-size:11px;color:var(--muted);display:flex;gap:9px;align-items:center}
 .text-btn:hover{color:var(--paper)}
 .preset-bank{display:grid;grid-template-columns:repeat(6,1fr);padding:12px 14px;gap:6px;border-bottom:1px solid var(--line)}
-.preset-bank{display:grid;grid-template-columns:repeat(8,1fr);padding:12px 14px;gap:6px;border-bottom:1px solid var(--line)}
+.preset-bank{display:grid;grid-template-columns:repeat(9,1fr);padding:12px 14px;gap:6px;border-bottom:1px solid var(--line)}
 .preset{position:relative;min-width:0;text-align:left;padding:12px 12px 10px;border:1px solid #45463e;border-radius:2px;background:#282924;min-height:98px;box-shadow:inset 0 1px #ffffff08}
 .preset:hover{background:#35362e;border-color:#898b79}
 .preset[aria-pressed="true"]{background:var(--paper);border-color:var(--paper);color:#22231e}
@@ -75,6 +75,17 @@ body.audio-live .input-guide{opacity:0}
 .panel-play-btn{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;height:20px;background:#151613;border:1px solid #535548;border-radius:2px;color:var(--orange);font:9px var(--mono);letter-spacing:0.06em;transition:all .18s;cursor:pointer}
 .panel-play-btn:hover{background:#35372d;border-color:var(--orange)}
 .panel-play-btn.paused{background:var(--orange);color:#1b1c18;border-color:var(--orange);font-weight:700}
+.spotify-connect{display:flex;flex-direction:column;gap:6px;margin-top:8px;min-width:0}
+.spotify-connect .text-btn{margin-left:0;color:#1db954}
+.spotify-connect .text-btn:hover{color:#1ed760}
+.spotify-connect.connected .text-btn{color:var(--muted);font-size:10px}
+.spotify-track{display:flex;flex-direction:column;gap:5px;min-width:0}
+.spotify-track-info{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.spotify-track-title{font:11px var(--mono);color:var(--paper);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spotify-track-artist{font:10px var(--mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spotify-progress{position:relative;height:3px;background:#3a3b34;border-radius:2px;overflow:hidden}
+.spotify-progress-fill{position:absolute;inset:0 auto 0 0;width:0%;background:#1db954;border-radius:2px;transition:width .15s linear}
+.spotify-times{display:flex;justify-content:space-between;font:9px var(--mono);color:var(--muted)}
 .seg{display:flex;gap:4px}
 .seg-btn{display:flex;align-items:center;justify-content:space-between;gap:6px;flex:1;background:#151613;border:1px solid #535548;border-radius:2px;padding:8px 7px;font-size:11px}
 .seg-btn.active{border-color:var(--orange);color:var(--orange);box-shadow:inset 0 -2px var(--orange)}
@@ -163,10 +174,7 @@ body.cursor-hidden{cursor:none}
 #titlebar-controls button{background:none;border:0;width:42px;height:30px}
 #titlebar-controls button:hover{background:#3a3b31}
 #titlebar-controls #btn-close:hover{background:#a43e31}
-body.is-fullscreen #chrome-zone,
-body.is-fullscreen .masthead{display:none!important}
-body.is-fullscreen .stage-caption{top:36px}
-body.is-fullscreen .input-guide{top:40px}
+body.is-fullscreen #chrome-zone{display:none}
 @media(max-width:1000px){
   .masthead{left:25px;right:25px}.stage-caption{left:27px}.input-guide{right:27px}
   #dock-zone{left:16px;right:16px;bottom:14px}.control-cell{padding:0 10px}

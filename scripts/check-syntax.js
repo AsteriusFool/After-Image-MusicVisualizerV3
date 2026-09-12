@@ -15,6 +15,7 @@ const { execFileSync } = require('child_process');
 const FILES = [
   'main.js',
   'preload.js',
+  'spotify-auth.js',
   'server.js',
   'scripts/postinstall.js',
   'scripts/check-syntax.js',
@@ -33,6 +34,9 @@ const FILES = [
   'renderer/viz/particles.js',
   'renderer/viz/tunnel.js',
   'renderer/shader-library.js',
+  'renderer/album-color.js',
+  'renderer/viz/aura.js',
+  'renderer/shaders/aura.glsl.js',
 ];
 
 let failed = 0;

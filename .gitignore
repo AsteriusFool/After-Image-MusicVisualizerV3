@@ -15,3 +15,6 @@ renderer/lib/
 .claude-flow/data/
 .claude-flow/logs/
 .claude-flow/sessions/
+
+# Local Spotify app credentials — see config/spotify.example.json
+config/spotify.json

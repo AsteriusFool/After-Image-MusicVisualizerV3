@@ -1,0 +1,4 @@
+{
+  "_comment": "Copy this file to config/spotify.json (gitignored) and paste in your own Client ID. Get one free at https://developer.spotify.com/dashboard — create an app, then add http://127.0.0.1:8888/callback as a Redirect URI in its settings. No Client Secret is needed; this app uses the PKCE flow, which is the correct/recommended flow for a desktop app.",
+  "clientId": "YOUR_SPOTIFY_CLIENT_ID"
+}
