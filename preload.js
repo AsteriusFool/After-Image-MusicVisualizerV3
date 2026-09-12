@@ -39,6 +39,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('fullscreen-changed', listener);
   },
 
+  /**
+   * Spotify "now playing" companion connection — read-only (see spotify-auth.js).
+   * `spotifyConnect` opens a browser login and resolves once approved or
+   * rejected; `spotifyNowPlaying` is meant to be polled periodically while
+   * connected, and resolves to null whenever nothing is currently playing.
+   */
+  spotifyConnect:    () => ipcRenderer.invoke('spotify-connect'),
+  spotifyDisconnect: () => ipcRenderer.invoke('spotify-disconnect'),
+  spotifyStatus:     () => ipcRenderer.invoke('spotify-status'),
+  spotifyNowPlaying: () => ipcRenderer.invoke('spotify-now-playing'),
+
   /** Current OS ('win32' | 'darwin' | 'linux'). */
   platform: process.platform,
 });

@@ -9,6 +9,7 @@ import { AudioAnalyzer }                          from './audio-analyzer.js';
 import { Visualizer }                             from './visualizer.js';
 import { DockUI }                                 from './ui.js';
 import { loadLastSource }                         from './shader-library.js';
+import { extractPaletteFromImage }                from './album-color.js';
 
 // ── Initialise core objects ──────────────────────────────────────────────────
 const canvas     = document.getElementById('canvas');
@@ -191,20 +192,171 @@ window.addEventListener('drop', e => {
 });
 
 // ── Keyboard: fullscreen also on F11 ─────────────────────────────────────────
-document.addEventListener('keydown', async e => {
+document.addEventListener('keydown', e => {
   if (e.key === 'F11') {
     e.preventDefault();
-    if (window.electronAPI?.windowFullscreenToggle) {
-      const isFs = await window.electronAPI.windowFullscreenToggle();
-      if (typeof isFs === 'boolean') {
-        document.body.classList.toggle('is-fullscreen', isFs);
-        const fsBtn = document.getElementById('btn-fullscreen');
-        if (fsBtn) fsBtn.setAttribute('aria-pressed', String(isFs));
-      }
-    } else {
-      ui._toggleFullscreen();
-    }
+    window.electronAPI?.windowFullscreenToggle();
   }
+});
+
+// ── Spotify "now playing" companion connection ───────────────────────────────
+// Read-only: identifies what's playing and its exact position (see
+// spotify-auth.js). It never supplies audio — System Audio loopback is still
+// what the visualizer actually reacts to, so while connected this also
+// auto-starts System Audio the moment Spotify reports playback, instead of
+// requiring a separate manual click on top of connecting. The album art URL
+// feeds Album Aura's live palette (see album-color.js) whenever it changes.
+const spotifyBtn          = document.getElementById('btn-spotify');
+const spotifyWrap         = document.getElementById('spotify-connect');
+const spotifyTrackEl      = document.getElementById('spotify-track');
+const spotifyTitleEl      = document.getElementById('spotify-track-title');
+const spotifyArtistEl     = document.getElementById('spotify-track-artist');
+const spotifyProgressEl   = document.getElementById('spotify-progress');
+const spotifyProgressFill = document.getElementById('spotify-progress-fill');
+const spotifyElapsedEl    = document.getElementById('spotify-elapsed');
+const spotifyDurationEl   = document.getElementById('spotify-duration');
+let spotifyPollTimer = null;
+let spotifyAutoStarting = false;
+let lastAlbumArtUrl = null;
+
+// Position/duration as of the last poll, plus when that poll landed — used
+// to interpolate a smoothly advancing progress bar between polls (Spotify
+// is only polled every few seconds; redrawing every animation frame from
+// this makes the bar move continuously instead of jumping every poll).
+let spotifyState = null; // { progressMs, durationMs, isPlaying, fetchedAtMs }
+
+function formatTime(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function stopSpotifyPolling() {
+  if (spotifyPollTimer) { clearInterval(spotifyPollTimer); spotifyPollTimer = null; }
+  spotifyState = null;
+  spotifyTrackEl?.setAttribute('hidden', '');
+}
+
+/**
+ * Starts System Audio capture on its own once Spotify reports something is
+ * actually playing, so connecting Spotify alone is enough to see the
+ * visuals react — no separate "System" click needed. Only kicks in when no
+ * source is already selected, so it never overrides an existing manual
+ * choice (e.g. Mic). Electron's desktop-loopback capture doesn't require a
+ * user gesture the way a browser mic/cam permission prompt would, so this
+ * is safe to trigger without a click.
+ */
+async function autoStartSystemAudioForSpotify() {
+  if (spotifyAutoStarting || analyzer.isConnected) return;
+  spotifyAutoStarting = true;
+  try {
+    ui.syncSource('system');
+    await startCapture('system');
+  } finally {
+    spotifyAutoStarting = false;
+  }
+}
+
+async function updateAuraPaletteIfChanged(albumArtUrl) {
+  if (!albumArtUrl || albumArtUrl === lastAlbumArtUrl) return;
+  lastAlbumArtUrl = albumArtUrl;
+  try {
+    const palette = await extractPaletteFromImage(albumArtUrl);
+    visualizer.setAuraPalette(palette.colorA, palette.colorB, palette.colorC);
+    if (palette.image) visualizer.setAuraArt(palette.image);
+  } catch (err) {
+    console.error('[app] album art palette extraction failed:', err);
+  }
+}
+
+async function pollSpotifyNowPlaying() {
+  try {
+    const track = await window.electronAPI.spotifyNowPlaying();
+    if (!spotifyTrackEl) return;
+
+    if (!track) {
+      spotifyState = null;
+      spotifyTrackEl.hidden = true;
+      return;
+    }
+
+    spotifyTrackEl.hidden = false;
+    if (spotifyTitleEl) spotifyTitleEl.textContent = track.title;
+    if (spotifyArtistEl) spotifyArtistEl.textContent = track.artist;
+    spotifyState = {
+      progressMs: track.progressMs ?? 0,
+      durationMs: track.durationMs ?? 0,
+      isPlaying: !!track.isPlaying,
+      fetchedAtMs: performance.now(),
+    };
+    renderSpotifyProgress(); // paint immediately rather than waiting for the next animation frame
+
+    if (track.isPlaying) autoStartSystemAudioForSpotify();
+    updateAuraPaletteIfChanged(track.albumArtUrl);
+  } catch (err) {
+    console.error('[app] Spotify now-playing poll failed:', err);
+  }
+}
+
+/**
+ * Redraws the progress bar from the last poll's position plus whatever time
+ * has elapsed since, so it advances smoothly every frame instead of jumping
+ * once every few seconds when a new poll actually lands. Called both right
+ * after each poll and every animation frame from loop().
+ */
+function renderSpotifyProgress() {
+  if (!spotifyState || !spotifyProgressFill) return;
+  const { progressMs, durationMs, isPlaying, fetchedAtMs } = spotifyState;
+  const elapsedSincePoll = isPlaying ? performance.now() - fetchedAtMs : 0;
+  const positionMs = Math.min(durationMs || Infinity, progressMs + elapsedSincePoll);
+  const pct = durationMs > 0 ? Math.min(100, (positionMs / durationMs) * 100) : 0;
+
+  spotifyProgressFill.style.width = `${pct}%`;
+  spotifyProgressEl?.setAttribute('aria-valuenow', String(Math.round(pct)));
+  if (spotifyElapsedEl) spotifyElapsedEl.textContent = formatTime(positionMs);
+  if (spotifyDurationEl) spotifyDurationEl.textContent = formatTime(durationMs);
+}
+
+function startSpotifyPolling() {
+  stopSpotifyPolling();
+  pollSpotifyNowPlaying();
+  spotifyPollTimer = setInterval(pollSpotifyNowPlaying, 3000);
+}
+
+function setSpotifyConnectedUI(connected) {
+  spotifyWrap?.classList.toggle('connected', connected);
+  if (spotifyBtn) spotifyBtn.textContent = connected ? 'Disconnect Spotify' : 'Connect Spotify';
+  if (connected) startSpotifyPolling();
+  else stopSpotifyPolling();
+}
+
+spotifyBtn?.addEventListener('click', async () => {
+  if (!window.electronAPI?.spotifyConnect) return;
+  const status = await window.electronAPI.spotifyStatus();
+
+  if (status?.connected) {
+    await window.electronAPI.spotifyDisconnect();
+    setSpotifyConnectedUI(false);
+    return;
+  }
+
+  spotifyBtn.disabled = true;
+  spotifyBtn.textContent = 'Check your browser…';
+  const result = await window.electronAPI.spotifyConnect();
+  spotifyBtn.disabled = false;
+
+  if (result?.ok) {
+    setSpotifyConnectedUI(true);
+  } else {
+    setSpotifyConnectedUI(false);
+    ui.setStatus?.(`Spotify: ${result?.error || 'connection failed'}`, 'error');
+  }
+});
+
+// Reflect an already-connected state on launch (tokens persist across restarts).
+window.electronAPI?.spotifyStatus?.().then(status => {
+  if (status?.connected) setSpotifyConnectedUI(true);
 });
 
 // ── Animation loop ───────────────────────────────────────────────────────────
@@ -213,6 +365,7 @@ const EMPTY_BINS = new Float32Array(256);
 function loop() {
   requestAnimationFrame(loop);
 
+  renderSpotifyProgress();
   analyzer.update(ui.sensitivity);
 
   const isConn = analyzer.isConnected;

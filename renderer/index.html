@@ -50,7 +50,7 @@
     <section id="dock" data-hidden="false" aria-label="Visualizer controls">
       <div class="console-top">
         <span class="eyebrow"><i class="pilot" aria-hidden="true"></i> VISUAL ENGINE</span>
-        <span class="console-hint">Select a form <span aria-hidden="true">/</span> keys 1&#8211;8</span>
+        <span class="console-hint">Select a form <span aria-hidden="true">/</span> keys 1&#8211;9</span>
         <button class="text-btn" id="btn-hide-dock" title="Hide controls (H)">Hide panel <kbd>H</kbd></button>
       </div>
 
@@ -63,6 +63,7 @@
 <button class="preset" data-preset="exc3" data-label="EXC3 Motion" data-description="Kinetic typography" aria-pressed="false" title="EXC3 Motion (6)"><span class="preset-number">06</span><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="10" width="28" height="28" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M16 24h16M24 16v16M14 14l20 20" stroke="currentColor" stroke-width="1.8"/></svg><span class="preset-name">EXC3 Motion</span><span class="preset-description">Kinetic typography</span></button>
 <button class="preset" data-preset="impulse" data-label="Bass Impulse" data-description="Physics-punched shards" aria-pressed="false" title="Bass Impulse (7)"><span class="preset-number">07</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6v9M24 33v9M6 24h9M33 24h9M13 13l6 6M29 29l6 6M35 13l-6 6M19 29l-6 6"/><circle cx="24" cy="24" r="6"/></svg><span class="preset-name">Bass Impulse</span><span class="preset-description">Physics-punched shards</span></button>
 <button class="preset" data-preset="custom" data-label="Live Shader" data-description="Write your own GLSL" aria-pressed="false" title="Live Shader (8)"><span class="preset-number">08</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M18 15 8 24l10 9M30 15l10 9-10 9M27 12l-6 24"/></svg><span class="preset-name">Live Shader</span><span class="preset-description">Write your own GLSL</span></button>
+<button class="preset" data-preset="aura" data-label="Album Aura" data-description="Colors from the cover art" aria-pressed="false" title="Album Aura (9)"><span class="preset-number">09</span><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="9"/><circle cx="24" cy="24" r="16" stroke-dasharray="3 4"/></svg><span class="preset-name">Album Aura</span><span class="preset-description">Colors from the cover art</span></button>
       </nav>
 
       <div class="dock-body">
@@ -79,6 +80,22 @@
             <button id="btn-file" class="seg-btn" data-src="file" aria-pressed="false">File <span aria-hidden="true">&#8862;</span></button>
           </div>
           <input type="file" id="audio-file-input" accept="audio/*" hidden>
+          <div class="spotify-connect" id="spotify-connect">
+            <button id="btn-spotify" class="text-btn" title="Connect Spotify to show what's playing (read-only — doesn't send audio)">Connect Spotify</button>
+            <div class="spotify-track" id="spotify-track" hidden>
+              <div class="spotify-track-info">
+                <span class="spotify-track-title" id="spotify-track-title"></span>
+                <span class="spotify-track-artist" id="spotify-track-artist"></span>
+              </div>
+              <div class="spotify-progress" id="spotify-progress" role="progressbar" aria-label="Track position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="spotify-progress-fill" id="spotify-progress-fill"></div>
+              </div>
+              <div class="spotify-times">
+                <span id="spotify-elapsed">0:00</span>
+                <span id="spotify-duration">0:00</span>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="control-cell signal-cell" aria-label="Audio signal">
@@ -147,7 +164,7 @@
       </section>
       <footer class="console-footer"><span>AFTERIMAGE <span class="footer-slash">/</span> MUSIC VISUALIZER</span><span>Made to disappear. <kbd>H</kbd> hide &#183; <kbd>F</kbd> fullscreen</span></footer>
       <!-- Kept for the existing menu controller and keyboard shortcuts. -->
-      <div id="viz-menu" hidden><button id="viz-trigger" aria-expanded="false"><span id="viz-value">Bars</span></button><div id="viz-pop" role="menu" hidden><button role="menuitemradio" data-value="bars">Bars</button><button role="menuitemradio" data-value="orb">Orb</button><button role="menuitemradio" data-value="particles">Particles</button><button role="menuitemradio" data-value="random">Morphing Forms</button><button role="menuitemradio" data-value="speaker">Neon Wormhole</button><button role="menuitemradio" data-value="exc3">EXC3 Motion</button><button role="menuitemradio" data-value="impulse">Bass Impulse</button><button role="menuitemradio" data-value="custom">Live Shader</button></div></div>
+      <div id="viz-menu" hidden><button id="viz-trigger" aria-expanded="false"><span id="viz-value">Bars</span></button><div id="viz-pop" role="menu" hidden><button role="menuitemradio" data-value="bars">Bars</button><button role="menuitemradio" data-value="orb">Orb</button><button role="menuitemradio" data-value="particles">Particles</button><button role="menuitemradio" data-value="random">Morphing Forms</button><button role="menuitemradio" data-value="speaker">Neon Wormhole</button><button role="menuitemradio" data-value="exc3">EXC3 Motion</button><button role="menuitemradio" data-value="impulse">Bass Impulse</button><button role="menuitemradio" data-value="custom">Live Shader</button><button role="menuitemradio" data-value="aura">Album Aura</button></div></div>
     </section>
     <button id="dock-peek" title="Show controls (H)" aria-label="Show controls">afterimage <span>&#8593; <kbd>H</kbd></span></button>
   </div>

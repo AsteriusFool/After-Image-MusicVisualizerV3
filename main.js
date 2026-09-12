@@ -12,6 +12,7 @@ const {
 } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const spotifyAuth = require('./spotify-auth');
 
 let mainWindow = null;
 let tray = null;
@@ -168,7 +169,7 @@ function createWindow() {
         responseHeaders: {
           ...details.responseHeaders,
           'Content-Security-Policy': [
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob: data:;",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co; media-src 'self' blob: data:;",
           ],
         },
       });
@@ -250,11 +251,8 @@ ipcMain.handle('window-maximize', () => {
 ipcMain.handle('window-close', () => mainWindow?.close());
 
 ipcMain.handle('window-fullscreen-toggle', () => {
-  if (!mainWindow) return false;
-  const next = !mainWindow.isFullScreen();
-  mainWindow.setFullScreen(next);
-  mainWindow.webContents.send('fullscreen-changed', next);
-  return next;
+  if (!mainWindow) return;
+  mainWindow.setFullScreen(!mainWindow.isFullScreen());
 });
 
 ipcMain.handle('window-is-fullscreen', () => {
@@ -267,3 +265,9 @@ ipcMain.handle('window-always-on-top-toggle', () => {
   mainWindow.setAlwaysOnTop(next);
   return next;
 });
+
+// ─── Spotify "now playing" companion connection (see spotify-auth.js) ─────────
+ipcMain.handle('spotify-connect', () => spotifyAuth.connect());
+ipcMain.handle('spotify-disconnect', () => { spotifyAuth.disconnect(); return true; });
+ipcMain.handle('spotify-status', () => spotifyAuth.getStatus());
+ipcMain.handle('spotify-now-playing', () => spotifyAuth.getNowPlaying());

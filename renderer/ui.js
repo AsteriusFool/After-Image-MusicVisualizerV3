@@ -13,7 +13,7 @@ import { loadLibrary, addShader, removeShader, renameShader, saveLastSource } fr
 
 const SPECTRUM_BARS = 56;
 const IDLE_MS       = 2800;   // hide the dock this long after the last input
-const VIZ_ORDER     = ['bars', 'orb', 'particles', 'random', 'speaker', 'exc3', 'impulse', 'custom'];
+const VIZ_ORDER     = ['bars', 'orb', 'particles', 'random', 'speaker', 'exc3', 'impulse', 'custom', 'aura'];
 
 const rgbToHex = ([r, g, b]) => {
   const c = n => Math.round(Math.min(1, Math.max(0, n)) * 255).toString(16).padStart(2, '0');
@@ -27,28 +27,54 @@ export class DockUI {
   constructor(handlers) {
     this._on = handlers;
 
-    const byId = id => document.getElementById(id);
-    this._root = byId('dock'); this._zone = byId('dock-zone'); this._peek = byId('dock-peek');
-    this._statusEl = byId('status'); this._dotEl = byId('status-dot');
-    this._sensEl = byId('sensitivity'); this._sensVal = byId('sens-val');
-    this._flashEl = byId('beat-flash'); this._hintEl = byId('hint');
-    this._playBtn = byId('btn-play-pause'); this._sectionTag = byId('section-tag');
-    this._shaderPanel = byId('shader-panel'); this._shaderSource = byId('shader-source');
-    this._shaderError = byId('shader-error'); this._shaderSaveName = byId('shader-save-name');
-    this._shaderLibraryEl = byId('shader-library'); this._shaderLibraryTrigger = byId('shader-library-trigger');
-    this._shaderLibraryCountEl = byId('shader-library-count'); this._shaderLibrarySearch = byId('shader-library-search');
-    this._css = document.documentElement.style;
+    this._root      = document.getElementById('dock');
+    this._zone      = document.getElementById('dock-zone');
+    this._peek      = document.getElementById('dock-peek');
+    this._statusEl  = document.getElementById('status');
+    this._dotEl     = document.getElementById('status-dot');
+    this._sensEl    = document.getElementById('sensitivity');
+    this._sensVal   = document.getElementById('sens-val');
+    this._flashEl   = document.getElementById('beat-flash');
+    this._hintEl    = document.getElementById('hint');
+    this._playBtn   = document.getElementById('btn-play-pause');
+    this._sectionTag = document.getElementById('section-tag');
+    this._shaderPanel  = document.getElementById('shader-panel');
+    this._shaderSource = document.getElementById('shader-source');
+    this._shaderError  = document.getElementById('shader-error');
+    this._shaderSaveName      = document.getElementById('shader-save-name');
+    this._shaderLibraryEl     = document.getElementById('shader-library');
+    this._shaderLibraryTrigger = document.getElementById('shader-library-trigger');
+    this._shaderLibraryCountEl = document.getElementById('shader-library-count');
+    this._shaderLibrarySearch  = document.getElementById('shader-library-search');
+    this._css       = document.documentElement.style;
 
-    this._collapsed = false; this._idle = false; this._audioLive = false;
-    this._openMenu = null; this._idleTimer = 0; this._hintTimer = 0;
-    this._autoOn = false; this._lastSection = null; this._renamingShaderId = null;
-    this._energy = 0; this._beat = 0;
+    this._collapsed   = false;   // toggled by the user (H / peek / hide button)
+    this._idle        = false;   // auto-hidden after inactivity
+    this._audioLive   = false;
+    this._openMenu    = null;
+    this._idleTimer   = 0;
+    this._hintTimer   = 0;
+    this._autoOn      = false;   // Auto-Director: switch visuals on detected drops
+    this._lastSection = null;
+    this._renamingShaderId = null;
 
-    this._buildSpectrum(); this._wireSource(); this._wirePlayPause();
-    this._wireMenus(); this._wirePresets(); this._wireSlider();
-    this._wireWindow(); this._wireRetro(); this._wireAuto();
-    this._wirePin(); this._wireRecord(); this._wireShaderEditor();
-    this._wireVisibility(); this._wireKeyboard();
+    this._energy = 0;            // smoothed, for the accent glow
+    this._beat   = 0;            // decays each frame
+
+    this._buildSpectrum();
+    this._wireSource();
+    this._wirePlayPause();
+    this._wireMenus();
+    this._wirePresets();
+    this._wireSlider();
+    this._wireWindow();
+    this._wireRetro();
+    this._wireAuto();
+    this._wirePin();
+    this._wireRecord();
+    this._wireShaderEditor();
+    this._wireVisibility();
+    this._wireKeyboard();
 
     this.setTheme('neon');
     this._selectMenuItem('viz', 'bars');
@@ -97,21 +123,27 @@ export class DockUI {
   /** Reflect a programmatic visualizer change back into the menu. */
   syncViz(value) { this._selectMenuItem('viz', value); }
 
+  /** Reflect active audio source in the segmented control and toggle panel play button visibility. */
   syncSource(kind) {
     for (const b of document.querySelectorAll('#source-seg .seg-btn')) {
       const match = b.dataset.src === kind;
       b.classList.toggle('active', match);
       b.setAttribute('aria-pressed', String(match));
     }
+    // Only appear if the user chose the file option
     this.setPlayState(this._isPlaying ?? true, kind === 'file');
   }
 
+  /** Update accent CSS variables + the color menu selection. */
   setTheme(name) {
     const t = THEMES[name];
     if (!t) return;
-    this._css.setProperty('--acc-a', rgbToHex(t.a));
-    this._css.setProperty('--acc-b', rgbToHex(t.b));
-    this._css.setProperty('--acc-mix', rgbToHex(t.a.map((v, i) => (v + t.b[i]) / 2)));
+    const a = rgbToHex(t.a);
+    const b = rgbToHex(t.b);
+    const mix = rgbToHex(t.a.map((v, i) => (v + t.b[i]) / 2));
+    this._css.setProperty('--acc-a', a);
+    this._css.setProperty('--acc-b', b);
+    this._css.setProperty('--acc-mix', mix);
     this._selectMenuItem('theme', name);
   }
 
@@ -120,40 +152,48 @@ export class DockUI {
     const cur = this._menus.viz.pop.querySelector('[aria-checked="true"]')?.dataset.value ?? VIZ_ORDER[0];
     const idx = VIZ_ORDER.indexOf(cur);
     const next = VIZ_ORDER[(idx + step + VIZ_ORDER.length) % VIZ_ORDER.length];
-    this.syncViz(next); this._on.onViz(next);
+    this.syncViz(next);
+    this._on.onViz(next);
     return next;
   }
 
+  /** Advances to the next (or, with step -1, previous) color theme. */
   cycleTheme(step = 1) {
     const names = Object.keys(THEMES);
     const cur = this._menus.theme.pop.querySelector('[aria-checked="true"]')?.dataset.value ?? 'neon';
     const idx = names.indexOf(cur);
     const next = names[(idx + step + names.length) % names.length];
-    this.setTheme(next); this._on.onTheme(next);
+    this.setTheme(next);
+    this._on.onTheme(next);
     this._flashHint(`Color · <b>${next}</b>`);
     return next;
   }
 
+  /** Reflects the detected song-section (intro/build/drop/peak/breakdown) next to the signal meter. */
   setSectionTag(section) {
     if (!this._sectionTag || section === this._lastSection) return;
     this._lastSection = section;
     this._sectionTag.textContent = section ? `· ${section.toUpperCase()}` : '';
   }
 
+  /** Toggles the recording indicator on the REC button. */
   setRecordingState(active) {
     this._recBtn?.classList.toggle('recording', !!active);
     this._recBtn?.classList.toggle('active', !!active);
     this._recBtn?.setAttribute('aria-pressed', String(!!active));
   }
 
+  /** Prefills the live-shader editor textarea (used when entering Live Shader mode). */
   setShaderSource(source) {
     if (this._shaderSource) this._shaderSource.value = source ?? '';
     if (this._shaderError) this._shaderError.textContent = '';
     this._renderShaderLibrary();
   }
 
+  /** Called every animation frame from app.js. */
   react(bins, energy, beat, details = {}) {
     const kick = details.kick ?? (beat ? 1 : 0);
+    // Smoothed energy drives the dock's ambient glow.
     this._energy += (Math.min(energy * 2.2, 1) - this._energy) * 0.12;
     this._beat *= 0.86;
     if (beat || kick > 0.4) {
@@ -165,20 +205,25 @@ export class DockUI {
     this._css.setProperty('--energy', this._energy.toFixed(3));
     this._css.setProperty('--beat', this._beat.toFixed(3));
 
+    // Mini spectrum — skip the DOM work while the dock is off-screen.
     if (this._collapsed || this._idle) return;
     for (let i = 0; i < SPECTRUM_BARS; i++) {
       const src = Math.floor((i / SPECTRUM_BARS) * (bins.length - 1));
       let v = 0;
       for (let j = src; j < src + 4 && j < bins.length; j++) v = Math.max(v, bins[j]);
       const prev = this._smooth[i];
+      // fast attack, slow release
       this._smooth[i] = v > prev ? v : prev * 0.82 + v * 0.18;
       this._sbars[i].style.transform = `scaleY(${(0.04 + this._smooth[i] * 0.96).toFixed(3)})`;
     }
   }
 
+  // ── Build helpers ──────────────────────────────────────────────
+
   _buildSpectrum() {
     const wrap = document.getElementById('dock-spectrum');
-    this._sbars = []; this._smooth = new Float32Array(SPECTRUM_BARS);
+    this._sbars  = [];
+    this._smooth = new Float32Array(SPECTRUM_BARS);
     for (let i = 0; i < SPECTRUM_BARS; i++) {
       const bar = document.createElement('span');
       bar.className = 'sbar';
@@ -190,8 +235,9 @@ export class DockUI {
   _wireSource() {
     for (const btn of document.querySelectorAll('#source-seg .seg-btn')) {
       btn.addEventListener('click', () => {
-        this.syncSource(btn.dataset.src);
-        this._on.onSource(btn.dataset.src);
+        const src = btn.dataset.src;
+        this.syncSource(src);
+        this._on.onSource(src);
       });
     }
   }
@@ -207,8 +253,6 @@ export class DockUI {
     this._menus = {
       viz:   { pop: document.getElementById('viz-pop'),   trigger: document.getElementById('viz-trigger'),   valueEl: document.getElementById('viz-value') },
       theme: { pop: document.getElementById('theme-pop'), trigger: document.getElementById('theme-trigger'), valueEl: document.getElementById('theme-value') },
-      // No menuitem children (it's a search + list, not a radio menu) — the
-      // generic open/close/outside-click/Escape handling below still applies.
       shaderLibrary: { pop: document.getElementById('shader-library-pop'), trigger: document.getElementById('shader-library-trigger'), valueEl: null },
     };
 
@@ -246,8 +290,11 @@ export class DockUI {
       m.pop.addEventListener('keydown', e => {
         const items = [...m.pop.querySelectorAll('[role^="menuitem"]')];
         const index = items.indexOf(document.activeElement);
-        if (e.key === 'Escape') { e.preventDefault(); this._toggleMenu(null); m.trigger.focus(); }
-        else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          this._toggleMenu(null);
+          m.trigger.focus();
+        } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
           e.preventDefault();
           const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1
             : (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
@@ -295,9 +342,6 @@ export class DockUI {
         const isCustom = value === 'custom';
         this._shaderPanel.hidden = !isCustom;
         if (isCustom) this._on.onCustomMode?.();
-        // Leaving the mode hides the panel via CSS regardless, but without this
-        // the library popover would still think it's open (aria-expanded, the
-        // outside-click handler) and silently reappear next time it's reachable.
         else if (this._openMenu === 'shaderLibrary') this._toggleMenu(null);
       }
     }
@@ -334,46 +378,36 @@ export class DockUI {
 
   _wireWindow() {
     const api = window.electronAPI;
-    document.getElementById('btn-minimize')?.addEventListener('click', () => api?.windowMinimize());
-    document.getElementById('btn-maximize')?.addEventListener('click', () => api?.windowMaximize());
-    document.getElementById('btn-close')?.addEventListener('click', () => api?.windowClose());
+    document.getElementById('btn-minimize') ?.addEventListener('click', () => api?.windowMinimize());
+    document.getElementById('btn-maximize') ?.addEventListener('click', () => api?.windowMaximize());
+    document.getElementById('btn-close')    ?.addEventListener('click', () => api?.windowClose());
     document.getElementById('btn-fullscreen')?.addEventListener('click', () => this._toggleFullscreen());
+
     if (!api) document.getElementById('chrome-zone').style.display = 'none';
 
-    const setFsState = isFs => {
-      const active = !!isFs;
-      document.body.classList.toggle('is-fullscreen', active);
-      document.getElementById('btn-fullscreen')?.setAttribute('aria-pressed', String(active));
-    };
-
-    api?.onFullscreenChange?.(setFsState);
-    api?.windowIsFullscreen?.().then(setFsState);
-    document.addEventListener('fullscreenchange', () => setFsState(!!document.fullscreenElement));
-    window.addEventListener('resize', () => {
-      if (api?.windowIsFullscreen) api.windowIsFullscreen().then(setFsState);
-      else setFsState(!!document.fullscreenElement || (window.innerHeight >= screen.height && window.innerWidth >= screen.width));
+    // Hide the custom titlebar once truly fullscreen, on either path: native OS
+    // fullscreen in Electron (no DOM signal of its own — main process tells us),
+    // or the browser Fullscreen API when running outside Electron.
+    api?.onFullscreenChange?.(isFullScreen => {
+      document.body.classList.toggle('is-fullscreen', isFullScreen);
+    });
+    document.addEventListener('fullscreenchange', () => {
+      document.body.classList.toggle('is-fullscreen', !!document.fullscreenElement);
     });
   }
 
   async _toggleFullscreen() {
-    if (window.electronAPI) {
-      try {
-        const isFs = await window.electronAPI.windowFullscreenToggle();
-        if (typeof isFs === 'boolean') {
-          document.body.classList.toggle('is-fullscreen', isFs);
-          document.getElementById('btn-fullscreen')?.setAttribute('aria-pressed', String(isFs));
-        }
-      } catch (err) { console.error('[ui] windowFullscreenToggle error:', err); }
-      return;
-    }
+    if (window.electronAPI) return window.electronAPI.windowFullscreenToggle();
     try {
-      if (document.fullscreenElement) { await document.exitFullscreen(); document.body.classList.remove('is-fullscreen'); }
-      else { await document.documentElement.requestFullscreen(); document.body.classList.add('is-fullscreen'); }
-    } catch { this._flashHint('Fullscreen is unavailable in this browser.'); }
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      this._flashHint('Fullscreen is unavailable in this browser.');
+    }
   }
 
   _wireRetro() {
-    this._retroOn = true;
+    this._retroOn  = true;
     this._retroBtn = document.getElementById('btn-retro');
     this._retroBtn?.addEventListener('click', () => { this._toggleRetro(); this._markActivity(); });
   }
@@ -434,15 +468,11 @@ export class DockUI {
     this._shaderSource?.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); this._applyShader(); }
     });
-    // The search box lives inside the popover's keydown listener (menu arrow-key
-    // navigation, wired in _wireMenus) — stop those keys short of it so Home/End/
-    // arrows still move the text cursor instead of being treated as menu commands.
     this._shaderLibrarySearch?.addEventListener('keydown', e => {
       e.stopPropagation();
       if (e.key === 'Escape') { this._toggleMenu(null); this._shaderLibraryTrigger?.focus(); }
     });
     this._shaderLibrarySearch?.addEventListener('input', () => this._renderShaderLibrary());
-    // Delegated so newly-rendered rows (added/removed by save/rename/delete) need no re-wiring.
     this._shaderLibraryEl?.addEventListener('click', e => {
       const row = e.target.closest('.shader-lib-row');
       if (!row) return;
@@ -462,9 +492,9 @@ export class DockUI {
 
   _applyShader() {
     const src = this._shaderSource?.value ?? '';
-    const res = this._on.onShaderApply?.(src);
-    if (res && !res.ok) {
-      if (this._shaderError) this._shaderError.textContent = res.error || 'Shader failed to compile.';
+    const result = this._on.onShaderApply?.(src);
+    if (result && !result.ok) {
+      if (this._shaderError) this._shaderError.textContent = result.error || 'Shader failed to compile.';
     } else {
       if (this._shaderError) this._shaderError.textContent = '';
       this._flashHint('Shader <b>applied</b>');
@@ -487,29 +517,24 @@ export class DockUI {
     const entry = loadLibrary().find(e => e.id === id);
     if (!entry) return;
     if (this._shaderSource) this._shaderSource.value = entry.source;
-    const res = this._on.onShaderApply?.(entry.source);
-    if (res && !res.ok) {
-      if (this._shaderError) this._shaderError.textContent = res.error || 'Shader failed to compile.';
+    const result = this._on.onShaderApply?.(entry.source);
+    if (result && !result.ok) {
+      if (this._shaderError) this._shaderError.textContent = result.error || 'Saved shader failed to compile.';
     } else {
       if (this._shaderError) this._shaderError.textContent = '';
       this._flashHint(`Loaded <b>${entry.name}</b>`);
       saveLastSource(entry.source);
-      // Closing the outside-click listener no longer does this for us (rename/
-      // delete/search need clicks inside the popover to NOT close it) — so a
-      // successful load closes it explicitly, matching viz/theme menu-item feel.
-      this._toggleMenu(null);
     }
+    this._toggleMenu(null);
     this._renderShaderLibrary();
   }
 
-  /** Renames a saved shader in place, replacing its row with a text input until Enter/blur (or Escape to cancel). */
   _commitShaderRename(id, input, cancelled) {
     if (!cancelled) renameShader(id, input.value);
     this._renamingShaderId = null;
     this._renderShaderLibrary();
   }
 
-  /** Rebuilds the saved-shaders list, filtered by the search box and highlighting the current editor text. */
   _renderShaderLibrary() {
     const all = loadLibrary();
     if (this._shaderLibraryCountEl) {
@@ -585,36 +610,62 @@ export class DockUI {
   _wireVisibility() {
     document.getElementById('btn-hide-dock').addEventListener('click', () => this._setCollapsed(true));
     this._peek.addEventListener('click', e => { e.stopPropagation(); this._setCollapsed(false); });
-    const act = () => this._markActivity();
-    ['mousemove', 'mousedown', 'wheel'].forEach(ev => window.addEventListener(ev, act, ev === 'wheel' ? { passive: true } : undefined));
-    this._root.addEventListener('focusin', act);
-    this._root.addEventListener('mouseenter', () => clearTimeout(this._idleTimer));
+
+    const activity = () => this._markActivity();
+    window.addEventListener('mousemove', activity);
+    this._root.addEventListener('focusin', activity);
+    window.addEventListener('mousedown', activity);
+    window.addEventListener('wheel', activity, { passive: true });
+    this._root.addEventListener('mouseenter', () => { clearTimeout(this._idleTimer); });
     this._root.addEventListener('mouseleave', () => this._scheduleIdle());
   }
 
   _wireKeyboard() {
     window.addEventListener('keydown', e => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      const k = e.key.toLowerCase();
-      if (k === 'h') this._setCollapsed(!this._collapsed);
-      else if (k === ' ' || k === 'space') { if (this._on.onPlayPause) { e.preventDefault(); this._on.onPlayPause(); } }
-      else if (k === 'f') this._toggleFullscreen();
-      else if (k === 'escape') { if (document.body.classList.contains('is-fullscreen')) { e.preventDefault(); this._toggleFullscreen(); } }
-      else if (k === 'r') this._toggleRetro();
-      else if (k === 'c') this.cycleTheme(1);
-      else if (k === '[' || k === ']') {
-        const step = k === ']' ? 0.15 : -0.15;
-        this._sensEl.value = Math.min(4, Math.max(0.1, this.sensitivity + step)).toFixed(2);
-        this._syncSlider();
-        this._flashHint(`Sensitivity · <b>${this.sensitivity.toFixed(1)}×</b>`);
-      } else if (e.key >= '1' && e.key <= String(VIZ_ORDER.length)) {
-        const value = VIZ_ORDER[+e.key - 1];
-        this.syncViz(value); this._on.onViz(value);
-        this._flashHint(`<b>${this._menus.viz.valueEl.textContent}</b>`);
-      } else { return; }
+      if (e.target instanceof HTMLInputElement) return;
+      switch (e.key.toLowerCase()) {
+        case 'h':
+          this._setCollapsed(!this._collapsed);
+          break;
+        case ' ':
+        case 'space':
+          if (this._on.onPlayPause) {
+            e.preventDefault();
+            this._on.onPlayPause();
+          }
+          break;
+        case 'f':
+          this._toggleFullscreen();
+          break;
+        case 'r':
+          this._toggleRetro();
+          break;
+        case 'c':
+          this.cycleTheme(1);
+          break;
+        case '[':
+        case ']': {
+          const step = e.key === ']' ? 0.15 : -0.15;
+          this._sensEl.value = Math.min(4, Math.max(0.1, this.sensitivity + step)).toFixed(2);
+          this._syncSlider();
+          this._flashHint(`Sensitivity · <b>${this.sensitivity.toFixed(1)}×</b>`);
+          break;
+        }
+        default:
+          if (e.key >= '1' && e.key <= String(VIZ_ORDER.length)) {
+            const value = VIZ_ORDER[+e.key - 1];
+            this.syncViz(value);
+            this._on.onViz(value);
+            this._flashHint(`<b>${this._menus.viz.valueEl.textContent}</b>`);
+          } else {
+            return;
+          }
+      }
       this._markActivity();
     });
   }
+
+  // ── Visibility state machine ───────────────────────────────────
 
   _setCollapsed(state) {
     this._collapsed = state;
