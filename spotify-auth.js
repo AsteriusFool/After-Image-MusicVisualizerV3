@@ -25,7 +25,7 @@
  *   3. Copy config/spotify.example.json to config/spotify.json with your Client ID
  */
 
-const { app, shell } = require('electron');
+const { app, shell, safeStorage } = require('electron');
 const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -38,6 +38,12 @@ const SCOPES = 'user-read-currently-playing user-read-playback-state';
 const AUTH_TIMEOUT_MS = 120000;
 
 let cachedTokens = null; // { accessToken, refreshToken, expiresAt }
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
 
 function base64url(buffer) {
   return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -67,6 +73,13 @@ function tokenFilePath() {
   return path.join(app.getPath('userData'), 'spotify-tokens.json');
 }
 
+/**
+ * Tokens are encrypted at rest with Electron's `safeStorage` (OS keychain —
+ * DPAPI on Windows, Keychain on macOS, libsecret on Linux) so a plain
+ * filesystem read of userData doesn't hand over a working Spotify session.
+ * Falls back to plaintext only on the rare platform where OS encryption
+ * isn't available (e.g. a Linux box with no secret-service running).
+ */
 function saveTokens(tokenResponse, fallbackRefreshToken) {
   const data = {
     accessToken: tokenResponse.access_token,
@@ -76,7 +89,12 @@ function saveTokens(tokenResponse, fallbackRefreshToken) {
   };
   try {
     fs.mkdirSync(path.dirname(tokenFilePath()), { recursive: true });
-    fs.writeFileSync(tokenFilePath(), JSON.stringify(data), 'utf8');
+    const json = JSON.stringify(data);
+    if (safeStorage.isEncryptionAvailable()) {
+      fs.writeFileSync(tokenFilePath(), safeStorage.encryptString(json));
+    } else {
+      fs.writeFileSync(tokenFilePath(), json, 'utf8');
+    }
   } catch (err) {
     console.error('[spotify-auth] failed to persist tokens:', err.message);
   }
@@ -85,8 +103,28 @@ function saveTokens(tokenResponse, fallbackRefreshToken) {
 }
 
 function loadPersistedTokens() {
+  let raw;
   try {
-    return JSON.parse(fs.readFileSync(tokenFilePath(), 'utf8'));
+    raw = fs.readFileSync(tokenFilePath());
+  } catch (_) {
+    return null;
+  }
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
+      return JSON.parse(safeStorage.decryptString(raw));
+    } catch (_) {
+      // Not encrypted yet (older plaintext file, or unrelated content) —
+      // fall through and try reading it as plain JSON, then migrate below.
+    }
+  }
+  try {
+    const legacy = JSON.parse(raw.toString('utf8'));
+    if (safeStorage.isEncryptionAvailable()) {
+      // Silently upgrade a pre-existing plaintext token file to encrypted
+      // storage the next time it's read.
+      try { fs.writeFileSync(tokenFilePath(), safeStorage.encryptString(JSON.stringify(legacy))); } catch (_) {}
+    }
+    return legacy;
   } catch (_) {
     return null;
   }
@@ -122,10 +160,18 @@ function waitForAuthCode(expectedState) {
       const state = parsed.searchParams.get('state');
       const ok = !error && code && state === expectedState;
 
+      // `error` (and any other query param here) comes from the raw incoming
+      // request to this loopback server, not from Spotify directly — a
+      // malicious page could point a browser at this URL manually while the
+      // server is briefly listening. Escape it before interpolating into
+      // HTML so that can't become a reflected-XSS payload.
+      const safeMessage = ok
+        ? 'You can close this tab and go back to Afterimage.'
+        : escapeHtml(error || 'Could not verify this login — please try again.');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(`<!doctype html><html><body style="font-family:sans-serif;background:#191917;color:#eee;text-align:center;padding:60px">
         <h2>${ok ? 'Spotify connected' : 'Spotify connection failed'}</h2>
-        <p>${ok ? 'You can close this tab and go back to Afterimage.' : (error || 'Could not verify this login — please try again.')}</p>
+        <p>${safeMessage}</p>
         </body></html>`);
 
       if (ok) finish(null, code);

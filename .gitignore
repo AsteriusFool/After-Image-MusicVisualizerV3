@@ -18,3 +18,13 @@ renderer/lib/
 
 # Local Spotify app credentials — see config/spotify.example.json
 config/spotify.json
+
+# Local AI-coding-tool config/skills/agents — not part of the shipped app;
+# some of this predates this rule and is already tracked (flagged separately,
+# not touched here), but nothing further should get swept in by `git add -A`.
+.claude/
+.codex/
+.agents/
+.github/agents/
+.github/hooks/
+.github/skills/
