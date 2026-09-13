@@ -5,12 +5,13 @@
  * Node's http/crypto/fs, none of which the renderer has direct access to).
  *
  * This deliberately does NOT capture audio: Spotify's API never exposes
- * track audio to third-party apps, only metadata and (with a wider scope,
- * not requested here) playback control. The actual sound you hear still
- * comes from System Audio loopback exactly as before — this just tells the
- * app which track that sound is and exactly where in it, so features like
- * accurate lyrics sync or album-art-driven visuals have something real to
- * key off instead of guessing from a filename.
+ * track audio to third-party apps, only metadata and playback control. The
+ * actual sound you hear still comes from System Audio loopback exactly as
+ * before — this just tells the app which track that sound is and exactly
+ * where in it (for album-art-driven visuals), and lets it send play/pause/
+ * skip/seek commands to whichever device Spotify Connect currently has
+ * active. Playback control requires a Spotify Premium account — Spotify's
+ * API rejects it for Free accounts regardless of what this app does.
  *
  * Auth flow: OAuth 2.0 Authorization Code with PKCE — the correct flow for
  * a desktop app, since there's nowhere safe to hide a traditional Client
@@ -33,8 +34,8 @@ const path = require('path');
 
 const REDIRECT_PORT = 8888;
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}/callback`;
-// Read-only: what's playing + its position. No playback-control scope requested.
-const SCOPES = 'user-read-currently-playing user-read-playback-state';
+// What's playing + its position, plus playback control (play/pause/skip/seek).
+const SCOPES = 'user-read-currently-playing user-read-playback-state user-modify-playback-state';
 const AUTH_TIMEOUT_MS = 120000;
 
 let cachedTokens = null; // { accessToken, refreshToken, expiresAt }
@@ -248,6 +249,47 @@ async function fetchCurrentlyPlaying(accessToken) {
   };
 }
 
+/**
+ * Sends a playback-control command to whichever device Spotify Connect
+ * currently has active. Returns { ok, error } — never throws, since this is
+ * called directly from renderer button clicks via IPC.
+ */
+async function sendPlaybackCommand(method, endpoint, body) {
+  const clientId = loadClientId();
+  if (!clientId) return { ok: false, error: 'Spotify is not configured.' };
+  const accessToken = await getValidAccessToken(clientId);
+  if (!accessToken) return { ok: false, error: 'Spotify is not connected.' };
+
+  let res;
+  try {
+    res = await fetch(`https://api.spotify.com/v1/me/player${endpoint}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+
+  if (res.status === 204 || res.ok) return { ok: true, error: null };
+  if (res.status === 404) return { ok: false, error: 'Nothing is currently playing on Spotify.' };
+  if (res.status === 403) return { ok: false, error: 'Spotify Premium is required for playback control.' };
+  if (res.status === 401) return { ok: false, error: 'Reconnect Spotify to enable playback control.' };
+  return { ok: false, error: `Spotify playback command failed (${res.status}).` };
+}
+
+function play()     { return sendPlaybackCommand('PUT', '/play'); }
+function pause()     { return sendPlaybackCommand('PUT', '/pause'); }
+function next()      { return sendPlaybackCommand('POST', '/next'); }
+function previous()  { return sendPlaybackCommand('POST', '/previous'); }
+function seek(positionMs) {
+  const ms = Math.max(0, Math.round(Number(positionMs) || 0));
+  return sendPlaybackCommand('PUT', `/seek?position_ms=${ms}`);
+}
+
 /** Runs the full login flow: opens the system browser, waits for approval, stores tokens. */
 async function connect() {
   const clientId = loadClientId();
@@ -300,4 +342,4 @@ async function getNowPlaying() {
   return fetchCurrentlyPlaying(accessToken);
 }
 
-module.exports = { connect, disconnect, getStatus, getNowPlaying };
+module.exports = { connect, disconnect, getStatus, getNowPlaying, play, pause, next, previous, seek };

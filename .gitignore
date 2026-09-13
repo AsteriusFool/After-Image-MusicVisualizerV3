@@ -28,3 +28,8 @@ config/spotify.json
 .github/agents/
 .github/hooks/
 .github/skills/
+
+# Impeccable design-hook per-developer/runtime state — config.json (the
+# shared ignore-list with reasons) is real project config and stays tracked.
+.impeccable/config.local.json
+.impeccable/hook.cache.json

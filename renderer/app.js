@@ -215,6 +215,9 @@ const spotifyProgressEl   = document.getElementById('spotify-progress');
 const spotifyProgressFill = document.getElementById('spotify-progress-fill');
 const spotifyElapsedEl    = document.getElementById('spotify-elapsed');
 const spotifyDurationEl   = document.getElementById('spotify-duration');
+const spotifyPrevBtn      = document.getElementById('btn-spotify-prev');
+const spotifyPlayPauseBtn = document.getElementById('btn-spotify-playpause');
+const spotifyNextBtn      = document.getElementById('btn-spotify-next');
 let spotifyPollTimer = null;
 let spotifyAutoStarting = false;
 let lastAlbumArtUrl = null;
@@ -291,6 +294,7 @@ async function pollSpotifyNowPlaying() {
       fetchedAtMs: performance.now(),
     };
     renderSpotifyProgress(); // paint immediately rather than waiting for the next animation frame
+    setSpotifyPlayPauseIcon(spotifyState.isPlaying);
 
     if (track.isPlaying) autoStartSystemAudioForSpotify();
     updateAuraPaletteIfChanged(track.albumArtUrl);
@@ -312,7 +316,7 @@ function renderSpotifyProgress() {
   const positionMs = Math.min(durationMs || Infinity, progressMs + elapsedSincePoll);
   const pct = durationMs > 0 ? Math.min(100, (positionMs / durationMs) * 100) : 0;
 
-  spotifyProgressFill.style.width = `${pct}%`;
+  spotifyProgressFill.style.transform = `scaleX(${pct / 100})`;
   spotifyProgressEl?.setAttribute('aria-valuenow', String(Math.round(pct)));
   if (spotifyElapsedEl) spotifyElapsedEl.textContent = formatTime(positionMs);
   if (spotifyDurationEl) spotifyDurationEl.textContent = formatTime(durationMs);
@@ -330,6 +334,41 @@ function setSpotifyConnectedUI(connected) {
   if (connected) startSpotifyPolling();
   else stopSpotifyPolling();
 }
+
+function setSpotifyPlayPauseIcon(isPlaying) {
+  if (!spotifyPlayPauseBtn) return;
+  spotifyPlayPauseBtn.innerHTML = isPlaying ? '&#9208;' : '&#9654;';
+  spotifyPlayPauseBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+}
+
+/**
+ * Runs a Spotify playback-control command from a button click: disables the
+ * button for the round trip, re-polls immediately so the UI reflects the
+ * real result rather than an optimistic guess, and surfaces any error
+ * (no Premium, no active device, needs reconnect) the same way connect
+ * errors are shown.
+ */
+async function runSpotifyPlaybackCommand(button, action) {
+  if (!window.electronAPI || button?.disabled) return;
+  if (button) button.disabled = true;
+  try {
+    const result = await action();
+    if (!result?.ok) ui.setStatus?.(`Spotify: ${result?.error || 'command failed'}`, 'error');
+    else await pollSpotifyNowPlaying();
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+spotifyPrevBtn?.addEventListener('click', () =>
+  runSpotifyPlaybackCommand(spotifyPrevBtn, () => window.electronAPI.spotifyPrevious()));
+
+spotifyNextBtn?.addEventListener('click', () =>
+  runSpotifyPlaybackCommand(spotifyNextBtn, () => window.electronAPI.spotifyNext()));
+
+spotifyPlayPauseBtn?.addEventListener('click', () =>
+  runSpotifyPlaybackCommand(spotifyPlayPauseBtn, () =>
+    spotifyState?.isPlaying ? window.electronAPI.spotifyPause() : window.electronAPI.spotifyPlay()));
 
 spotifyBtn?.addEventListener('click', async () => {
   if (!window.electronAPI?.spotifyConnect) return;
