@@ -18,8 +18,7 @@ A **universal music visualizer** for Windows (and macOS/Linux) that:
 - Runs a real-time **FFT** using the Web Audio API, plus energy/section (drop) detection
 - Renders eight live shader-based visualizations with **Three.js / WebGL**, including a
   fully editable **Live Shader** mode with a saved-shader library
-- Can **auto-switch visuals on song drops** (Auto-Director), **record the session to video**,
-  **pin the window always-on-top**, and be driven from a **system tray icon** or **global
+- Can **record the session to video** and be driven from a **system tray icon** or **global
   hotkeys** even while unfocused
 - Runs as a standalone **Electron** desktop app — no browser extension, no API keys
 
@@ -125,15 +124,10 @@ Then commit and push the tracked media file normally.
   (button-triggered popover, not always shown), rename it in place, and search the list
   by name. The last-applied shader is restored automatically on next launch. Everything
   is stored locally (`localStorage`) — nothing leaves your machine.
-- **Auto-Director** — optionally auto-switches to the next visualizer whenever the app
-  detects a song "drop" (a sudden jump from a quieter section to a loud, kick-heavy one),
-  so the visuals react to the structure of the track without manual input.
 - **Session recording** — capture the canvas and the current audio together into a
   `.webm` video file with one click (REC button).
-- **Always-on-top pin** — keep the window pinned above other apps (PIN button), useful
-  for running it as a live overlay while doing something else.
 - **System tray icon** — show/hide the window, play/pause, cycle visualizer, cycle color
-  theme, toggle always-on-top, and quit — all from the tray, even when the window is hidden.
+  theme, and quit — all from the tray, even when the window is hidden.
 - **Global hotkeys** (work even when the app isn't focused): `Alt+Shift+P` play/pause,
   `Alt+Shift+]` / `Alt+Shift+[` next/previous visualizer, `Alt+Shift+C` next color theme.
 - **True OS fullscreen** — the app launches straight into fullscreen so nothing (including
@@ -183,8 +177,6 @@ npm run build       # Windows NSIS installer → dist/
 | **Color** dropdown | Choose Neon, Fire, Ocean, Aurora, Sunset, Ice, Toxic, or Candy |
 | **Sensitivity** slider | Scale FFT amplitude (0.1 – 4×) |
 | **CRT** button | Toggle the retro CRT scanline look |
-| **AUTO** button | Toggle Auto-Director (auto-switch visualizer on song drops) |
-| **PIN** button | Toggle always-on-top |
 | **REC** button | Start/stop recording the session to a `.webm` file |
 | **Shader panel** (Live Shader mode) | Edit GLSL, Apply (`Ctrl/Cmd+Enter`), Reset, Save, and open the saved-shader Library popover (search + rename + load) |
 | `1`–`9` | Jump directly to a visualizer |
@@ -193,7 +185,7 @@ npm run build       # Windows NSIS installer → dist/
 | `Alt+Shift+P` | Play/Pause (global, works unfocused) |
 | `Alt+Shift+]` / `Alt+Shift+[` | Next / previous visualizer (global) |
 | `Alt+Shift+C` | Next color theme (global) |
-| System tray icon | Show/hide, play/pause, next visualizer, next color, toggle always-on-top, quit |
+| System tray icon | Show/hide, play/pause, next visualizer, next color, quit |
 
 ---
 
@@ -202,7 +194,7 @@ npm run build       # Windows NSIS installer → dist/
 ```
 MusicVisualizer/
 ├── main.js                    Electron main process — window, tray, global shortcuts,
-│                               fullscreen IPC, always-on-top IPC
+│                               fullscreen IPC
 ├── preload.js                 contextBridge API surface
 ├── spotify-auth.js            Spotify OAuth (PKCE) + now-playing polling — main process only
 ├── package.json

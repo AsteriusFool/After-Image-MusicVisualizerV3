@@ -29,7 +29,6 @@ const ui = new DockUI({
   onTheme:        name => visualizer.setTheme(name),
   onRetro:        on => visualizer.setRetro(on),
   onPlayPause:    togglePlayPause,
-  onPin:          togglePin,
   onRecordToggle: toggleRecording,
   onCustomMode:   () => ui.setShaderSource(visualizer.getCustomShaderSource()),
   onShaderApply:  src => visualizer.setCustomShader(src),
@@ -45,11 +44,6 @@ async function togglePlayPause() {
   const isPlaying = await analyzer.togglePlay();
   ui.setPlayState(isPlaying, true);
   ui._flashHint(isPlaying ? '<b>Playing</b>' : '<b>Paused</b>');
-}
-
-// ── Always-on-top pin (for overlay-style use while streaming) ────────────────
-async function togglePin() {
-  return window.electronAPI?.windowAlwaysOnTopToggle?.();
 }
 
 // ── Global (OS-level) hotkeys + tray actions, routed to the same logic as the
@@ -424,11 +418,6 @@ function loop() {
     section:  isConn ? analyzer.section  : 'intro',
     metadata: analyzer.metadata,
   };
-
-  // Auto-Director: on a detected drop, hand the visualizer off to the next preset.
-  if (ui.autoDirectorOn && isConn && analyzer.sectionChanged && analyzer.section === 'drop') {
-    ui.cycleViz(1);
-  }
 
   visualizer.render(bins, energy, beat, details);
   ui.react(bins, energy, beat, details);

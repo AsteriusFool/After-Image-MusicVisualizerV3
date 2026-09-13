@@ -509,8 +509,8 @@ export class AudioAnalyzer {
    * Coarse song-structure detector layered on top of the beat/energy signals
    * above. It is a heuristic (fast/slow/trend EMAs of overall energy plus a
    * decaying kick-rate counter), not a music-theoretic section analyser, but
-   * it is enough to notice build-ups and drops for the Auto-Director feature
-   * and the section badge in the dock.
+   * it is enough to notice build-ups and drops for the section badge in the
+   * dock.
    */
   _detectSection(now, dt, energy, kickHit) {
     // Seed all three EMAs from the first real sample instead of ramping up
@@ -543,9 +543,9 @@ export class AudioAnalyzer {
     // Drop detection is checked unconditionally, ahead of the general dwell
     // timer below. A build-up leads directly into a drop, so gating this
     // behind the 'build' state's own dwell would routinely swallow the exact
-    // moment Auto-Director cares about — by the time the hold expired, the
-    // fast/slow averages would already have caught up with each other and
-    // the state would slide straight into 'peak' instead.
+    // moment a build-up resolves into a drop — by the time the hold expired,
+    // the fast/slow averages would already have caught up with each other
+    // and the state would slide straight into 'peak' instead.
     const isDrop = ratio > 1.3 && this._sectionFastEMA > 0.12 && (this._kickDensity > 0.6 || ratio > 1.6);
     // Only counts as a fresh "drop" when arriving from a genuinely lower-energy
     // state — otherwise a sustained loud section can noisily re-trigger every

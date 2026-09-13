@@ -16,7 +16,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowClose:            () => ipcRenderer.invoke('window-close'),
   windowFullscreenToggle: () => ipcRenderer.invoke('window-fullscreen-toggle'),
   windowIsFullscreen:     () => ipcRenderer.invoke('window-is-fullscreen'),
-  windowAlwaysOnTopToggle: () => ipcRenderer.invoke('window-always-on-top-toggle'),
 
   /**
    * Subscribes to global (OS-level) hotkeys and tray-menu actions forwarded

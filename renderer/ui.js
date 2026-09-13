@@ -54,7 +54,6 @@ export class DockUI {
     this._openMenu    = null;
     this._idleTimer   = 0;
     this._hintTimer   = 0;
-    this._autoOn      = false;   // Auto-Director: switch visuals on detected drops
     this._lastSection = null;
     this._renamingShaderId = null;
 
@@ -69,8 +68,6 @@ export class DockUI {
     this._wireSlider();
     this._wireWindow();
     this._wireRetro();
-    this._wireAuto();
-    this._wirePin();
     this._wireRecord();
     this._wireShaderEditor();
     this._wireVisibility();
@@ -84,9 +81,6 @@ export class DockUI {
   // ── Public API ──────────────────────────────────────────────────
 
   get sensitivity() { return parseFloat(this._sensEl.value); }
-
-  /** True when Auto-Director (auto-switch visuals on detected song drops) is on. */
-  get autoDirectorOn() { return this._autoOn; }
 
   /** Update play/pause button state and visibility on the panel. */
   setPlayState(isPlaying, canControl = true) {
@@ -418,28 +412,6 @@ export class DockUI {
     this._retroBtn?.setAttribute('aria-pressed', String(this._retroOn));
     this._on.onRetro?.(this._retroOn);
     this._flashHint(`Retro CRT · <b>${this._retroOn ? 'on' : 'off'}</b>`);
-  }
-
-  _wireAuto() {
-    this._autoBtn = document.getElementById('btn-auto');
-    this._autoBtn?.addEventListener('click', () => {
-      this._autoOn = !this._autoOn;
-      this._autoBtn.classList.toggle('active', this._autoOn);
-      this._autoBtn.setAttribute('aria-pressed', String(this._autoOn));
-      this._flashHint(`Auto-Director · <b>${this._autoOn ? 'on' : 'off'}</b>`);
-      this._markActivity();
-    });
-  }
-
-  _wirePin() {
-    this._pinBtn = document.getElementById('btn-pin');
-    this._pinBtn?.addEventListener('click', async () => {
-      const on = await this._on.onPin?.();
-      this._pinBtn.classList.toggle('active', !!on);
-      this._pinBtn.setAttribute('aria-pressed', String(!!on));
-      this._flashHint(`Always on top · <b>${on ? 'on' : 'off'}</b>`);
-      this._markActivity();
-    });
   }
 
   _wireRecord() {

@@ -39,9 +39,9 @@ tab/extension or a hosted backend.
 
 Used in the foreground: the visuals are the primary thing being looked at
 (e.g. focused/relaxed music listening), typically fullscreen. The app also
-supports being pinned always-on-top and controlled via system tray or global
-hotkeys while unfocused, but the dominant, designed-for scenario is foreground
-viewing, not background/overlay use.
+supports being controlled via system tray or global hotkeys while
+unfocused, but the dominant, designed-for scenario is foreground viewing,
+not background/overlay use.
 
 Primary OS is Windows (WASAPI loopback works out of the box); macOS and Linux
 are supported but require the user to configure a loopback device manually
@@ -64,9 +64,8 @@ are supported but require the user to configure a loopback device manually
   there is no shared/baked-in key.
 - Electron with `nodeIntegration:false` + `contextIsolation:true`; all
   privileged access goes through `preload.js`'s contextBridge.
-- Auto-Director (auto-switch visualizer on detected song drops), session
-  recording to `.webm`, always-on-top pin, system tray controls, and global
-  hotkeys that work while the window is unfocused.
+- Session recording to `.webm`, system tray controls, and global hotkeys
+  that work while the window is unfocused.
 - No known photosensitivity/accessibility constraint has been raised; visuals
   are beat-reactive but this has not been flagged as a concern to design
   around.
