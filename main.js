@@ -169,12 +169,21 @@ function createWindow() {
         responseHeaders: {
           ...details.responseHeaders,
           'Content-Security-Policy': [
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co; media-src 'self' blob: data:;",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.scdn.co; media-src 'self' blob: data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none';",
           ],
         },
       });
     }
   );
+
+  // Defense in depth: this window only ever needs to show its own local
+  // index.html. Deny any attempt to navigate it elsewhere or pop a new
+  // window/tab (e.g. from a malicious or compromised dependency trying to
+  // load a remote page) — legitimate external links (Spotify login) go
+  // through shell.openExternal in the main process instead, never through
+  // window.open in the renderer.
+  mainWindow.webContents.on('will-navigate', (event) => event.preventDefault());
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
