@@ -69,17 +69,6 @@ function createTray() {
       { label: 'Next visualizer', click: () => mainWindow?.webContents.send('global-shortcut', 'next-viz') },
       { label: 'Next color', click: () => mainWindow?.webContents.send('global-shortcut', 'next-color') },
       { type: 'separator' },
-      {
-        label: 'Always on top',
-        type: 'checkbox',
-        checked: mainWindow?.isAlwaysOnTop() ?? false,
-        click: () => {
-          if (!mainWindow) return;
-          mainWindow.setAlwaysOnTop(!mainWindow.isAlwaysOnTop());
-          rebuildMenu();
-        },
-      },
-      { type: 'separator' },
       { label: 'Quit Afterimage', click: () => app.quit() },
     ]);
     tray.setContextMenu(menu);
@@ -266,13 +255,6 @@ ipcMain.handle('window-fullscreen-toggle', () => {
 
 ipcMain.handle('window-is-fullscreen', () => {
   return !!mainWindow?.isFullScreen();
-});
-
-ipcMain.handle('window-always-on-top-toggle', () => {
-  if (!mainWindow) return false;
-  const next = !mainWindow.isAlwaysOnTop();
-  mainWindow.setAlwaysOnTop(next);
-  return next;
 });
 
 // ─── Spotify "now playing" companion connection (see spotify-auth.js) ─────────
