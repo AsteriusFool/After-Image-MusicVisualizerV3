@@ -3,7 +3,6 @@ import * as THREE from './lib/three.module.js';
 import { BarsViz }      from './viz/bars.js';
 import { OrbViz }       from './viz/orb.js';
 import { ParticlesViz } from './viz/particles.js';
-import { TunnelViz }    from './viz/tunnel.js';
 import { AmbientEffects } from './effects.js';
 import { RandomViz }     from './viz/random.js';
 import { SpeakerViz }    from './viz/speaker.js';
@@ -245,13 +244,12 @@ export class Visualizer {
     const driftX = Math.sin(time * 0.42) * 0.09;
     const driftY = Math.cos(time * 0.31) * 0.06;
 
-    const isTunnel  = this._vizMode === 'tunnel';
     const isSpeaker = this._vizMode === 'speaker';
-    const pScale    = isTunnel ? 0.06 : (isSpeaker ? 0.12 : 0.35);
+    const pScale    = isSpeaker ? 0.12 : 0.35;
 
     const offsetX = this._mouseParallax.x * pScale + driftX;
     const offsetY = -this._mouseParallax.y * (pScale * 0.7) + driftY;
-    const recoilZ = this._kickImpulse * (isTunnel ? -0.06 : (isSpeaker ? -0.10 : 0.12));
+    const recoilZ = this._kickImpulse * (isSpeaker ? -0.10 : 0.12);
 
     // Dynamic Resolution Scaling to guarantee stable 60 FPS
     const nowMs = performance.now();
@@ -363,9 +361,6 @@ export class Visualizer {
       case 'particles':
         this._active = new ParticlesViz(this._scene, this._freqTex);
         break;
-      case 'tunnel':
-        this._active = new TunnelViz(this._scene, this._freqTex);
-        break;
       case 'random':
         this._active = new RandomViz(this._scene, this._freqTex);
         break;
@@ -400,11 +395,7 @@ export class Visualizer {
   }
 
   _setCameraForMode(mode) {
-    if (mode === 'tunnel') {
-      this._baseCamPos.set(0, 0.15, 1.1);
-      this._baseCamLook.set(0, 0, -4.5);
-      this._scene.background = null;
-    } else if (mode === 'random') {
+    if (mode === 'random') {
       this._baseCamPos.set(0, 0, 10);
       this._baseCamLook.set(0, 0, 0);
       this._scene.background = null;

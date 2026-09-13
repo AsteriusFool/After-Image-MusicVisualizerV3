@@ -1,0 +1,80 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "renderer/style.css"
+        ],
+        "createdAt": "2026-09-13T05:07:21.028Z",
+        "reason": "Agent: beat-reactive flash overlay and the active-toggle switch-light are a music visualizer's neon feedback, documented in README's own AdditiveBlending/neon-glow design decisions, not generic AI decoration"
+      },
+      {
+        "rule": "gpt-thin-border-wide-shadow",
+        "value": "*",
+        "files": [
+          "renderer/style.css"
+        ],
+        "createdAt": "2026-09-13T05:07:27.062Z",
+        "reason": "Agent: #dock and .menu-pop are a translucent console/popover elevated above a full-bleed WebGL canvas — the border defines the edge, the diffuse shadow lifts it off the busy canvas beneath; two real jobs, not a generic combo"
+      },
+      {
+        "rule": "repeating-stripes-gradient",
+        "value": "*",
+        "files": [
+          "renderer/style.css"
+        ],
+        "createdAt": "2026-09-13T05:07:31.496Z",
+        "reason": "Agent: #dock-spectrum's stripe is a 3%-opacity scale ruler under the frequency meter, not surface decoration"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "renderer/index.html"
+        ],
+        "createdAt": "2026-09-13T05:07:56.781Z",
+        "reason": "Agent: beat-reactive flash overlay and active-toggle switch-light are a music visualizer's neon feedback, documented in README's AdditiveBlending/neon-glow design decisions, not generic AI decoration"
+      },
+      {
+        "rule": "gpt-thin-border-wide-shadow",
+        "value": "*",
+        "files": [
+          "renderer/index.html"
+        ],
+        "createdAt": "2026-09-13T05:07:56.831Z",
+        "reason": "Agent: #dock and .menu-pop are a translucent console/popover elevated above a full-bleed WebGL canvas — border defines the edge, diffuse shadow lifts it off the canvas beneath; two real jobs, not a generic combo"
+      },
+      {
+        "rule": "repeating-stripes-gradient",
+        "value": "*",
+        "files": [
+          "renderer/index.html"
+        ],
+        "createdAt": "2026-09-13T05:07:56.882Z",
+        "reason": "Agent: #dock-spectrum's stripe is a 3%-opacity scale ruler under the frequency meter, not surface decoration"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "renderer/index.html"
+        ],
+        "createdAt": "2026-09-13T05:14:08.076Z",
+        "reason": "Agent: verified via real rendered measurement — .console-top (14-15px) and #titlebar-drag (9px vertical, 1063px from the claimed right edge) both sit well clear of their boundaries; the rule's static padding check misses flexbox align-items:center/justify-content compensation"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "renderer/style.css"
+        ],
+        "createdAt": "2026-09-13T05:14:08.127Z",
+        "reason": "Agent: same verified false positive as index.html — .console-top and #titlebar-drag rely on flex centering, not padding, for real clearance"
+      }
+    ]
+  }
+}

@@ -12,10 +12,7 @@ const LAST_SOURCE_KEY = 'afterimage.shaderLastSource.v1';
 const MAX_ENTRIES = 30;
 
 function makeId() {
-  try {
-    if (crypto?.randomUUID) return crypto.randomUUID();
-  } catch (_) {}
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 /** Returns all saved shaders, newest first. Never throws. */

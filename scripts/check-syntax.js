@@ -32,7 +32,6 @@ const FILES = [
   'renderer/viz/bars.js',
   'renderer/viz/orb.js',
   'renderer/viz/particles.js',
-  'renderer/viz/tunnel.js',
   'renderer/shader-library.js',
   'renderer/album-color.js',
   'renderer/viz/aura.js',

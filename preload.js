@@ -50,6 +50,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   spotifyStatus:     () => ipcRenderer.invoke('spotify-status'),
   spotifyNowPlaying: () => ipcRenderer.invoke('spotify-now-playing'),
 
+  /**
+   * Playback control — requires Spotify Premium and the wider scope granted
+   * on (re)connect; each resolves to { ok, error }, never throws.
+   */
+  spotifyPlay:     () => ipcRenderer.invoke('spotify-play'),
+  spotifyPause:    () => ipcRenderer.invoke('spotify-pause'),
+  spotifyNext:     () => ipcRenderer.invoke('spotify-next'),
+  spotifyPrevious: () => ipcRenderer.invoke('spotify-previous'),
+  spotifySeek:     (positionMs) => ipcRenderer.invoke('spotify-seek', positionMs),
+
   /** Current OS ('win32' | 'darwin' | 'linux'). */
   platform: process.platform,
 });

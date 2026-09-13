@@ -81,7 +81,7 @@
           </div>
           <input type="file" id="audio-file-input" accept="audio/*" hidden>
           <div class="spotify-connect" id="spotify-connect">
-            <button id="btn-spotify" class="text-btn" title="Connect Spotify to show what's playing (read-only — doesn't send audio)">Connect Spotify</button>
+            <button id="btn-spotify" class="text-btn" title="Connect Spotify to show what's playing and control playback (doesn't send audio; playback control needs Premium)">Connect Spotify</button>
             <div class="spotify-track" id="spotify-track" hidden>
               <div class="spotify-track-info">
                 <span class="spotify-track-title" id="spotify-track-title"></span>
@@ -93,6 +93,11 @@
               <div class="spotify-times">
                 <span id="spotify-elapsed">0:00</span>
                 <span id="spotify-duration">0:00</span>
+              </div>
+              <div class="spotify-controls" id="spotify-controls">
+                <button id="btn-spotify-prev" class="spotify-ctrl-btn" title="Previous track" aria-label="Previous track">&#9198;</button>
+                <button id="btn-spotify-playpause" class="spotify-ctrl-btn" title="Play/pause on Spotify" aria-label="Play or pause">&#9208;</button>
+                <button id="btn-spotify-next" class="spotify-ctrl-btn" title="Next track" aria-label="Next track">&#9197;</button>
               </div>
             </div>
           </div>
